@@ -69,7 +69,7 @@ export function Logo({
             alt="ACS Logo"
             width={config.image.width}
             height={config.image.height}
-            className="object-contain"
+            className="object-contain drop-shadow-[0_0_2px_rgba(255,255,255,1)]"
             priority={size === 'lg' || size === 'xl' || size === '2xl'}
           />
         </div>

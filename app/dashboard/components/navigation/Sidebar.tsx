@@ -86,19 +86,27 @@ function SidebarProvider({ children }: { children: React.ReactNode }) {
  * Main sidebar container with collapsible functionality
  */
 const Sidebar = memo(function Sidebar({ children }: { children: React.ReactNode }) {
-  const { isOpen, isMobile } = useSidebar()
+  const { isOpen, isMobile, toggle } = useSidebar()
 
   // Don't render sidebar on mobile - mobile menu is handled separately
   if (isMobile) {
     return null;
   }
 
+  const handleClick = () => {
+    if (!isOpen) {
+      toggle();
+    }
+  };
+
   return (
     <div
       className={cn(
-        'transition-all duration-300 bg-sidebar border-r border-sidebar-border flex-shrink-0 shadow-xl h-full sidebar-transition',
-        isOpen ? 'w-16 sm:w-20 md:w-64' : 'w-12 sm:w-16 md:w-28'
+        'transition-all duration-300 bg-[#288e41] border-r border-white/20 flex-shrink-0 shadow-xl h-full sidebar-transition',
+        isOpen ? 'w-16 sm:w-20 md:w-64' : 'w-12 sm:w-16 md:w-28',
+        !isOpen && 'cursor-pointer'
       )}
+      onClick={handleClick}
     >
       {children}
     </div>
@@ -139,34 +147,38 @@ const SidebarContent = memo(function SidebarContent({ children }: { children: Re
   return (
     <div className="flex flex-col h-full max-h-full relative">
       {/* Header with logo and toggle */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-4 border-b border-sidebar-border">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-4 border-b border-white/20">
         {/* Responsive Logo: show icon+text when open, icon-only when collapsed */}
         {isOpen ? (
-          <Logo size={logoSize} variant="icon-only" whiteText />
+          <Logo size={logoSize} variant="icon-only" whiteText href="/dashboard" />
         ) : (
-          <Logo size={logoSize === 'lg' ? 'md' : 'sm'} variant="icon-only" />
+          <div className="flex justify-center w-full">
+            <Logo size={logoSize === 'lg' ? 'md' : 'sm'} variant="icon-only" href="/dashboard" />
+          </div>
         )}
         <div className="flex items-center gap-2">
           {isMobile && (
             <button
-              onClick={toggle}
-              className="p-2 hover:bg-sidebar-accent rounded-lg transition-colors group"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle();
+              }}
+              className="p-2 rounded-lg transition-colors group"
               title="Close sidebar"
             >
-              <X className="h-5 w-5 text-sidebar-foreground group-hover:scale-110 transition-transform" />
+              <X className="h-5 w-5 text-white" />
             </button>
           )}
-          {!isMobile && (
+          {!isMobile && isOpen && (
             <button
-              onClick={toggle}
-              className="p-2 hover:bg-sidebar-accent rounded-lg transition-colors group"
-              title={isOpen ? "Collapse sidebar" : "Expand sidebar"}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggle();
+              }}
+              className="p-2 rounded-lg transition-colors group"
+              title="Collapse sidebar"
             >
-              {isOpen ? (
-                <ChevronLeft className="h-5 w-5 text-sidebar-foreground group-hover:scale-110 transition-transform" />
-              ) : (
-                <ChevronRight className="h-5 w-5 text-sidebar-foreground group-hover:scale-110 transition-transform" />
-              )}
+              <ChevronLeft className="h-5 w-5 text-white" />
             </button>
           )}
         </div>
@@ -201,11 +213,13 @@ const SidebarGroup = memo(function SidebarGroup({
 }) {
   const { isOpen, toggle: toggleSidebar } = useSidebar();
 
-  const handleHeaderClick = () => {
+  const handleHeaderClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     onToggle();
   };
 
-  const handleCollapsedClick = () => {
+  const handleCollapsedClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (!isOpen) {
       toggleSidebar();
     }
@@ -217,7 +231,7 @@ const SidebarGroup = memo(function SidebarGroup({
       <div className="px-2 py-2">
         <button
           onClick={handleCollapsedClick}
-          className="w-full flex items-center justify-center p-2 text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors group"
+          className="w-full flex items-center justify-center p-2 text-white rounded-lg transition-colors group"
           title={title}
         >
           {GroupIcon && <GroupIcon className="h-4 w-4" />}
@@ -231,7 +245,7 @@ const SidebarGroup = memo(function SidebarGroup({
       {title && (
         <button
           onClick={handleHeaderClick}
-          className="w-full flex items-center justify-between px-1 py-2 text-sidebar-foreground/60 hover:text-sidebar-foreground/80 transition-colors group"
+          className="w-full flex items-center justify-between px-1 py-2 text-white transition-colors group"
         >
           <div className="flex items-center gap-2">
             {GroupIcon && <GroupIcon className="h-3 w-3" />}
@@ -293,27 +307,20 @@ const NavigationItem = memo(function NavigationItem({ item, unreadCount }: Navig
   const pathname = usePathname()
   const isActive = pathname === item.url
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
     router.push(item.url)
   }
 
   return (
     <SidebarMenuItem>
-      <button
-        onClick={handleClick}
-        className={cn(
-          'w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group relative',
-          isActive
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-            : 'text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent'
-        )}
-        title={!isOpen ? item.title : undefined}
-      >
+              <button
+          onClick={handleClick}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 group relative text-white"
+          title={!isOpen ? item.title : undefined}
+        >
         <div className="relative flex-shrink-0">
-          <item.icon className={cn(
-            'h-4 w-4 group-hover:scale-110 transition-transform',
-            isActive ? 'text-sidebar-accent-foreground' : 'text-sidebar-foreground/80 group-hover:text-sidebar-foreground'
-          )} />
+          <item.icon className="h-4 w-4 transition-transform text-white" />
           {unreadCount && unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-4 h-4 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center">
               {unreadCount > 99 ? '99+' : unreadCount}
@@ -322,8 +329,8 @@ const NavigationItem = memo(function NavigationItem({ item, unreadCount }: Navig
         </div>
         {isOpen && (
           <div className="flex flex-col items-start min-w-0">
-            <span className="text-sm font-medium truncate">{item.title}</span>
-            <span className="text-xs text-sidebar-foreground/60 truncate">{item.description}</span>
+            <span className="text-sm font-medium truncate text-white">{item.title}</span>
+            <span className="text-xs text-white/80 truncate">{item.description}</span>
           </div>
         )}
       </button>
@@ -338,7 +345,8 @@ const NavigationItem = memo(function NavigationItem({ item, unreadCount }: Navig
 const LogoutButton = memo(function LogoutButton() {
   const { isOpen } = useSidebar()
 
-  const handleLogout = async () => {
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.stopPropagation();
     try {
       await clearAuthData()
       await signOut({ callbackUrl: '/' })
@@ -350,10 +358,10 @@ const LogoutButton = memo(function LogoutButton() {
   return (
     <button
       onClick={handleLogout}
-      className="w-full flex items-center gap-3 px-3 py-2 text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors group"
+      className="w-full flex items-center gap-3 px-3 py-2 text-white rounded-lg transition-colors group"
       title="Logout"
     >
-      <LogOut className="h-4 w-4 group-hover:scale-110 transition-transform" />
+      <LogOut className="h-4 w-4 transition-transform" />
       {isOpen && <span className="text-sm font-medium">Logout</span>}
     </button>
   )
@@ -375,9 +383,9 @@ const UserProfile = memo(function UserProfile({ user }: UserProfileProps) {
 
   return (
     <SidebarGroup isExpanded={true} onToggle={() => {}} onExpand={() => {}}>
-      <div className="flex items-center gap-3 p-3 bg-sidebar-accent/50 rounded-lg border border-sidebar-border user-profile-hover">
-        <div className="w-8 h-8 bg-sidebar-accent/80 rounded-full flex items-center justify-center flex-shrink-0">
-          <span className="text-sidebar-foreground font-semibold text-sm">
+      <div className="flex items-center gap-3 p-3 rounded-lg">
+        <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+          <span className="text-white font-semibold text-sm">
             {user.name
               ? user.name.split(' ').map(n => n[0]).join('').toUpperCase()
               : user.email?.charAt(0).toUpperCase() || 'U'
@@ -386,8 +394,8 @@ const UserProfile = memo(function UserProfile({ user }: UserProfileProps) {
         </div>
         {isOpen && (
           <div className="flex flex-col min-w-0">
-            <span className="text-sidebar-foreground font-medium text-sm truncate">{user.name || 'User'}</span>
-            <span className="text-sidebar-foreground/60 text-xs truncate">{user.email}</span>
+            <span className="text-white font-medium text-sm truncate">{user.name || 'User'}</span>
+            <span className="text-white/80 text-xs truncate">{user.email}</span>
           </div>
         )}
       </div>
@@ -405,14 +413,14 @@ const SidebarFooter = memo(function SidebarFooter() {
   if (!isOpen) return null
 
   return (
-    <div className="px-3 py-3 border-t border-sidebar-border">
-      <div className="flex flex-col gap-2 text-xs text-sidebar-foreground/60">
+    <div className="px-3 py-3 border-t border-white/20">
+      <div className="flex flex-col gap-2 text-xs text-white/60">
         <div className="flex flex-wrap gap-x-3 gap-y-1">
-          <a href="/legal/terms" className="hover:text-sidebar-foreground transition-colors">Terms</a>
-          <a href="/legal/privacy" className="hover:text-sidebar-foreground transition-colors">Privacy</a>
-          <a href="/legal/cookies" className="hover:text-sidebar-foreground transition-colors">Cookies</a>
+          <a href="/legal/terms" className="text-white/80 transition-colors">Terms</a>
+          <a href="/legal/privacy" className="text-white/80 transition-colors">Privacy</a>
+          <a href="/legal/cookies" className="text-white/80 transition-colors">Cookies</a>
         </div>
-        <span className="text-sidebar-foreground/40 text-center">© 2025 ACS. All rights reserved.</span>
+        <span className="text-white/40 text-center">© 2025 ACS. All rights reserved.</span>
       </div>
     </div>
   )
@@ -432,7 +440,7 @@ const SidebarTrigger = memo(function SidebarTrigger() {
   return (
     <button 
       onClick={toggle} 
-      className="p-2 -ml-2 rounded-full hover:bg-accent transition-colors"
+      className="p-2 -ml-2 rounded-full transition-colors"
       aria-label="Toggle sidebar"
     >
       <Menu className="h-6 w-6 text-foreground" />

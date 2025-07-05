@@ -1,5 +1,5 @@
-import React from 'react';
-import { TrendingUp, TrendingDown, Users, MessageSquare, Target, Clock, DollarSign, Activity, Zap, Calendar } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, TrendingDown, Users, MessageSquare, Target, Clock, Activity, Zap, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import type { DashboardMetrics as Metrics } from '@/types/dashboard';
 import { calculateTrends, shouldShowTrend, formatTrendChange, getTrendDirection, type TrendData } from '@/lib/utils/dashboard';
@@ -38,7 +38,7 @@ const MetricCard = ({
     const trendColor = trend === 'up' ? 'text-status-success' : trend === 'down' ? 'text-status-error' : 'text-muted-foreground';
 
     return (
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-lg transition-all duration-300 group">
+        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-lg transition-all duration-300 group min-w-[280px] flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex-1">
                     <p className="text-sm font-medium text-muted-foreground mb-1">{name}</p>
@@ -74,6 +74,8 @@ const MetricCard = ({
 };
 
 export function DashboardMetrics({ data, dateRange, conversations = [] }: DashboardMetricsProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  
   // Calculate trends if we have date range and conversations
   const trends = dateRange && dateRange.from && dateRange.to && conversations.length > 0 
     ? calculateTrends(conversations, dateRange.from, dateRange.to)
@@ -187,35 +189,64 @@ export function DashboardMetrics({ data, dateRange, conversations = [] }: Dashbo
     },
   ];
 
+  const visibleMetrics = metrics.slice(currentIndex, currentIndex + 4);
+  const canGoLeft = currentIndex > 0;
+  const canGoRight = currentIndex + 4 < metrics.length;
+
+  const handlePrevious = () => {
+    if (canGoLeft) {
+      setCurrentIndex(Math.max(0, currentIndex - 1));
+    }
+  };
+
+  const handleNext = () => {
+    if (canGoRight) {
+      setCurrentIndex(Math.min(metrics.length - 4, currentIndex + 1));
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        {metrics.map((metric) => (
-          <MetricCard key={metric.name} {...metric} />
-        ))}
-      </div>
-      
-      {/* Quick Stats Bar */}
-      <div className="bg-card p-4 rounded-lg border border-border shadow-sm">
-        <div className="flex items-center justify-between text-sm">
-          <div className="flex items-center space-x-6">
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 rounded-full bg-status-success"></div>
-              <span className="text-muted-foreground">Active: {data.activeConversations}</span>
+      {/* Horizontal Metrics Carousel */}
+      <div className="relative">
+        {/* Metrics Container */}
+        <div className="flex gap-4 overflow-hidden">
+          {/* Key Metrics Header Card */}
+          <div className="bg-[#288e41] p-6 rounded-xl border border-[#047857] shadow-sm min-w-[200px] flex-shrink-0 flex flex-col justify-center">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-3 rounded-lg bg-white/20">
+                <BarChart3 className="h-6 w-6 text-white" />
+              </div>
             </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 rounded-full bg-status-warning"></div>
-              <span className="text-muted-foreground">Pending: {data.totalConversations - data.activeConversations}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 rounded-full bg-status-success"></div>
-              <span className="text-muted-foreground">Completed: {Math.round((data.conversionRate / 100) * data.totalConversations)}</span>
-            </div>
+            <h3 className="text-xl font-bold text-white mb-1">Key Metrics</h3>
+            <p className="text-white/80 text-sm">Performance Overview</p>
           </div>
-          <div className="text-muted-foreground">
-            <Calendar className="w-4 h-4 inline mr-1" />
-            Last 30 days
+
+          {/* Metric Cards Container with Relative Positioning */}
+          <div className="relative flex gap-4">
+            {/* Metric Cards */}
+            {visibleMetrics.map((metric) => (
+              <MetricCard key={`${metric.name}-${currentIndex}`} {...metric} />
+            ))}
+            
+            {/* Navigation Arrows - Positioned relative to metric cards */}
+            {canGoLeft && (
+              <button
+                onClick={handlePrevious}
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-6 z-10 bg-white border border-border rounded-full p-3 shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <ChevronLeft className="h-5 w-5 text-muted-foreground" />
+              </button>
+            )}
+            
+            {canGoRight && (
+              <button
+                onClick={handleNext}
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-6 z-10 bg-white border border-border rounded-full p-3 shadow-lg hover:shadow-xl transition-all duration-200"
+              >
+                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+              </button>
+            )}
           </div>
         </div>
       </div>

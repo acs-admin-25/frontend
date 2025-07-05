@@ -111,24 +111,18 @@ export function DashboardContent({
         />
       </div>
 
-      <main className="flex-1 p-6 lg:p-8">
+      <main className="flex-1">
         {/* Enhanced Metrics Row */}
         {settings.showMetrics && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-foreground">Key Performance Metrics</h2>
-              <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                <span>Last updated: {new Date().toLocaleTimeString()}</span>
-                <span>•</span>
-                <span>{filteredData.conversations.length} conversations in selected range</span>
-              </div>
-            </div>
+          <div className="mb-8 max-w-screen-2xl mx-auto px-4 sm:px-6 md:px-8">
             <DashboardMetrics 
               data={filteredData.metrics} 
               conversations={data.conversations}
             />
           </div>
         )}
+        
+        <div className="p-6 lg:p-8">
         
         {/* 2-Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 auto-rows-min">
@@ -173,6 +167,7 @@ export function DashboardContent({
               <p className="text-muted-foreground">Common actions and shortcuts can be placed here for easy access.</p>
             </div>
           </div>
+        </div>
         </div>
       </main>
     </div>

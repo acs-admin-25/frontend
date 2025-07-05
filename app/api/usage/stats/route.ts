@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { config } from '@/lib/local-api-config';
+import { config } from '@/lib/config/local-api-config';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/types/auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { format } from 'date-fns';
 
 interface Invocation {
@@ -29,6 +29,46 @@ export async function GET(request: Request) {
     const sessionId = cookies?.split(';')
       .find(cookie => cookie.trim().startsWith('session_id='))
       ?.split('=')[1];
+
+    // If API_URL is not configured, return mock data for testing
+    if (!config.API_URL) {
+      console.warn('[usage/stats] API_URL not configured, returning mock data');
+      return NextResponse.json({
+        total: {
+          invocations: 150,
+          inputTokens: 45000,
+          outputTokens: 30000,
+        },
+        range: {
+          from: 'Jan 1, 2024',
+          to: 'Dec 31, 2024',
+          invocations: 150,
+          inputTokens: 45000,
+          outputTokens: 30000
+        },
+        conversationsByThread: [
+          {
+            threadId: 'mock-thread-1',
+            threadName: 'Mock Thread 1',
+            invocations: 25,
+            inputTokens: 7500,
+            outputTokens: 5000,
+            conversationUrl: '/dashboard/conversations/mock-thread-1',
+            timestamp: Date.now(),
+            isSelected: false
+          }
+        ],
+        timeStats: [
+          {
+            time: 'Jan',
+            invocations: 12,
+            inputTokens: 3600,
+            outputTokens: 2400,
+            conversations: 3
+          }
+        ]
+      });
+    }
 
     // Fetch all invocations for the user
     const response = await fetch(`${config.API_URL}/db/select`, {

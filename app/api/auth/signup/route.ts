@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import type { SignupData } from '@/app/types/auth';
-import { config } from '@/lib/local-api-config';
+import type { SignupData } from '@/types/auth';
+import { config } from '@/lib/config/local-api-config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -83,6 +83,18 @@ export async function POST(request: Request) {
             );
         }
 
+        // Handle the session_id cookie from the API response
+        const setCookieHeader = response.headers.get('set-cookie');
+        
+        // Extract session_id from the cookie header
+        let sessionId = null;
+        if (setCookieHeader) {
+            const sessionIdMatch = setCookieHeader.match(/session_id=([^;,\s]+)/);
+            if (sessionIdMatch?.[1]) {
+                sessionId = sessionIdMatch[1];
+            }
+        }
+        
         // Create response with the session token
         const nextResponse = NextResponse.json({
             success: true,
@@ -96,24 +108,20 @@ export async function POST(request: Request) {
                         provider: signupData.provider,
                         authType: 'new'
                     }
-                }
+                },
+                sessionId, // Include session_id in response body
             }
         });
 
-        // Handle the session_id cookie from the API response
-        const setCookieHeader = response.headers.get('set-cookie');
-        if (setCookieHeader) {
-            // Forward all cookies if there are multiple
-            setCookieHeader.split(',').forEach(cookie => {
-                let cookieToSet = cookie.trim();
-                if (process.env.NODE_ENV !== 'production') {
-                    // Remove Secure attribute for local development
-                    cookieToSet = cookieToSet.replace(/; ?secure/gi, '');
-                }
-                nextResponse.headers.append('set-cookie', cookieToSet);
-            });
-        } else {
-        }
+        // Forward all cookies if there are multiple
+        setCookieHeader?.split(',').forEach(cookie => {
+            let cookieToSet = cookie.trim();
+            if (process.env.NODE_ENV !== 'production') {
+                // Remove Secure attribute for local development
+                cookieToSet = cookieToSet.replace(/; ?secure/gi, '');
+            }
+            nextResponse.headers.append('set-cookie', cookieToSet);
+        });
 
         return nextResponse;
     } catch (error: any) {

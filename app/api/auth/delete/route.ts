@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { config } from '@/lib/local-api-config';
+import { config } from '@/lib/config/local-api-config';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/types/auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { Session } from 'next-auth';
 
 export async function POST(request: Request) {

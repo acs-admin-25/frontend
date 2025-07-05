@@ -9,7 +9,8 @@
  */
 
 import Link from "next/link"
-import { Logo } from "@/app/utils/Logo"
+import { Logo } from "@/components/ui/Logo"
+import { cn } from "@/lib/utils/utils"
 
 /**
  * Footer Component
@@ -33,37 +34,37 @@ import { Logo } from "@/app/utils/Logo"
  */
 export default function Footer() {
   return (
-    <footer className="bg-white border-t border-gray-200 py-12">
+    <footer className="bg-background border-t border-border py-12 font-sans">
       <div className="container mx-auto px-4">
         {/* Main footer content in responsive grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand section with logo and description */}
           <div>
             <Logo href="/" size="md" variant="icon-only" />
-            <p className="mt-2 text-gray-600 font-semibold">AI-powered solutions for real estate professionals</p>
+            <p className="mt-2 text-muted-foreground font-semibold">AI-powered solutions for real estate professionals</p>
           </div>
 
           {/* Solutions navigation section */}
           <div>
-            <h3 className="font-semibold text-gray-800 mb-3">Solutions</h3>
+            <h3 className="font-semibold text-foreground mb-3">Solutions</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/about" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/about" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Lead Conversion Pipeline (LCP)
                 </Link>
               </li>
               <li>
-                <Link href="/about" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/about" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Lead Generation Workflow (LGW)
                 </Link>
               </li>
               <li>
-                <Link href="/about" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/about" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   AI-Powered Automation
                 </Link>
               </li>
               <li>
-                <Link href="/about" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/about" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Real Estate Specialization
                 </Link>
               </li>
@@ -72,20 +73,22 @@ export default function Footer() {
 
           {/* Legal documents section */}
           <div>
-            <h3 className="font-semibold text-gray-800 mb-3">Legal</h3>
+            <Link href="/legal" className="font-semibold text-foreground mb-3 hover:text-primary transition-colors duration-200 block">
+              Legal
+            </Link>
             <ul className="space-y-2">
               <li>
-                <Link href="/legal/terms" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/legal/terms" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Terms of Service
                 </Link>
               </li>
               <li>
-                <Link href="/legal/privacy" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/legal/privacy" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link href="/legal/cookies" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/legal/cookies" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Cookie Policy
                 </Link>
               </li>
@@ -94,15 +97,15 @@ export default function Footer() {
 
           {/* Company information section */}
           <div>
-            <h3 className="font-semibold text-gray-800 mb-3">Company</h3>
+            <h3 className="font-semibold text-foreground mb-3">Company</h3>
             <ul className="space-y-2">
               <li>
-                <Link href="/about" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/about" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   About Us
                 </Link>
               </li>
               <li>
-                <Link href="/contact" style={{ color: '#0e6537', textDecoration: 'none' }} className="font-semibold hover:text-[#157a42]">
+                <Link href="/contact" className="font-semibold text-primary hover:text-primary-light transition-colors duration-200">
                   Contact
                 </Link>
               </li>
@@ -111,7 +114,7 @@ export default function Footer() {
         </div>
 
         {/* Copyright section with dynamic year */}
-        <div className="mt-8 pt-8 border-t border-gray-200 text-center text-gray-500 text-sm font-semibold">
+        <div className="mt-8 pt-8 border-t border-border text-center text-muted-foreground text-sm font-semibold">
           <p>&copy; {new Date().getFullYear()} ACS. All rights reserved.</p>
         </div>
       </div>

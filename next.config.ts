@@ -10,14 +10,11 @@ const nextConfig: NextConfig = {
   },
   // Add React strict mode for better error detection
   reactStrictMode: true,
-  // Ensure proper transpilation for Spline
-  transpilePackages: ['@splinetool/react-spline'],
   // Optimize for production
   // Add experimental features for better React 18 support
   experimental: {
     optimizePackageImports: ['@mui/material', '@mui/icons-material', 'lucide-react'],
   },
-  // Webpack configuration to handle Spline
   
 };
 

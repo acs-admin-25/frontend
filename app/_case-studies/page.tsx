@@ -14,7 +14,7 @@ import { Star, TrendingUp, BarChart2, MessageSquare, Users, ArrowUpRight, CheckC
 import { useEffect, useState } from "react"
 import "aos/dist/aos.css"
 import AOS from "aos"
-import Navbar from "../Navbar"
+import Navbar from "@/components/common/Navigation/Navbar"
 import Footer from "../Footer"
 
 /**

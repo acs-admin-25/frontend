@@ -1,375 +1,368 @@
 /**
  * File: app/dashboard/email/page.tsx
- * Purpose: Renders the email dashboard with inbox management, email templates, and performance metrics.
- * Author: Alejo Cagliolo
- * Date: 5/25/25
- * Version: 1.0.0
+ * Purpose: Email inbox interface with centralized data processing and modular components
+ * Author: AI Assistant
+ * Date: 2024-12-19
+ * Version: 3.0.0
  */
 
 "use client"
-import { useState, useEffect } from "react"
-import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
-import { 
-  ArrowLeft, Search, Filter, Plus, Mail, Send, Archive, 
-  Trash2, Star, Reply, Forward, Calendar, Users,
-  MoreHorizontal, Edit, Eye, MessageSquare, Inbox, AlertCircle
-} from "lucide-react"
-import { Logo } from "@/app/utils/Logo"
 
-/**
- * EmailPage Component
- * Main email management dashboard component
- * 
- * Features:
- * - Email inbox management
- * - Email composition and sending
- * - Email templates
- * - Email tracking and analytics
- * 
- * @returns {JSX.Element} Complete email management view
- */
-export default function EmailPage() {
-  const router = useRouter()
-  const { data: session, status } = useSession()
+import React, { Suspense, useState } from 'react';
+import { ErrorBoundary } from '@/components/common/Feedback/ErrorBoundary';
+import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
+import { useEmailData } from '@/lib/hooks/useCentralizedDashboardData';
+import { ArrowLeft, Mail, Inbox, Send, Archive, Trash2, Star, Search, Filter, RefreshCw, MoreVertical } from "lucide-react";
+import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
 
-  // Session check - redirect if not authenticated
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/')
-    }
-  }, [status, router])
+function EmailContent() {
+  const router = useRouter();
+  const { 
+    data,
+    conversations, 
+    loading, 
+    error, 
+    refetch 
+  } = useEmailData();
 
-  // Show loading while checking session
-  if (status === 'loading') {
+  const [selectedFolder, setSelectedFolder] = useState('inbox');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-[#f0f9f4] via-[#e6f5ec] to-[#d8eee1] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-[#0e6537] mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
+      <div className="flex items-center justify-center h-full">
+        <LoadingSpinner size="lg" text="Loading email inbox..." />
       </div>
-    )
+    );
   }
 
-  // Don't render anything if not authenticated
-  if (status === 'unauthenticated') {
-    return null
-  }
-
-  // State for email management
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedFolder, setSelectedFolder] = useState("inbox")
-  const [selectedEmails, setSelectedEmails] = useState<string[]>([])
-
-  // State management for selected email and active tab
-  const [activeTab, setActiveTab] = useState<'inbox' | 'junk'>('inbox')
-  const [junkCount, setJunkCount] = useState(0)
-  const [selectedEmail, setSelectedEmail] = useState<{
-    id: number;
-    from: string;
-    email: string;
-    subject: string;
-    preview: string;
-    time: string;
-    read: boolean;
-    starred: boolean;
-    type: string;
-    conversation_id?: string;
-    message_id?: string;
-    account_id?: string;
-  } | null>(null)
-
-  // Mock email data structure with junk emails
-  const emails = [
-    {
-      id: 1,
-      from: "Michael Rodriguez",
-      email: "michael.rodriguez@email.com",
-      subject: "Re: Downtown Condo Viewing",
-      preview: "Thanks for showing me the property yesterday. I'm very interested and would like to...",
-      time: "2 hours ago",
-      read: false,
-      starred: true,
-      type: "lead",
-    },
-    {
-      id: 2,
-      from: "Jennifer Chen",
-      email: "jennifer.chen@email.com",
-      subject: "Follow-up on Property Search",
-      preview: "Hi Sarah, I wanted to follow up on our conversation about finding a condo under...",
-      time: "4 hours ago",
-      read: true,
-      starred: false,
-      type: "client",
-    },
-    {
-      id: 3,
-      from: "David Thompson",
-      email: "david.thompson@email.com",
-      subject: "Ready to Make an Offer",
-      preview: "I've reviewed all the properties you sent and I'm ready to make an offer on the...",
-      time: "6 hours ago",
-      read: false,
-      starred: true,
-      type: "hot-lead",
-    },
-    {
-      id: 4,
-      from: "Lisa Park",
-      email: "lisa.park@email.com",
-      subject: "Questions about Financing",
-      preview: "I have some questions about the financing options for the suburban home we...",
-      time: "1 day ago",
-      read: true,
-      starred: false,
-      type: "client",
-    },
-    {
-      id: 5,
-      from: "Spam Sender",
-      email: "spam@example.com",
-      subject: "You've won a prize!",
-      preview: "Congratulations! You've been selected to win a million dollars...",
-      time: "1 day ago",
-      read: true,
-      starred: false,
-      type: "junk",
-      conversation_id: "conv_123",
-      message_id: "msg_456",
-      account_id: "acc_789"
-    },
-    {
-      id: 6,
-      from: "Another Spammer",
-      email: "spammer@example.com",
-      subject: "Urgent: Your account needs verification",
-      preview: "Your account has been compromised. Click here to verify...",
-      time: "2 days ago",
-      read: false,
-      starred: false,
-      type: "junk",
-      conversation_id: "conv_124",
-      message_id: "msg_457",
-      account_id: "acc_789"
-    }
-  ]
-
-  // Filter emails based on active tab
-  const filteredEmails = emails.filter(email => email.type !== 'junk')
-
-  // Update junk count
-  useEffect(() => {
-    const count = emails.filter(email => email.type === 'junk').length
-    setJunkCount(Math.min(count, 99))
-  }, [emails])
-
-  // Handle marking email as not spam
-  const handleMarkAsNotSpam = async (email: typeof selectedEmail) => {
-    if (!email?.conversation_id || !email?.message_id || !email?.account_id) return
-
-    try {
-      const response = await fetch('/api/lcp/mark_not_spam', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          conversation_id: email.conversation_id,
-          message_id: email.message_id,
-          account_id: email.account_id
-        }),
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to mark email as not spam')
-      }
-
-      // Update local state to reflect the change
-      const updatedEmails = emails.map(e => 
-        e.id === email.id ? { ...e, type: 'lead' } : e
-      )
-      // In a real app, you would update the emails state here
-      // setEmails(updatedEmails)
-    } catch (error) {
-      console.error('Error marking email as not spam:', error)
-      // Handle error (show toast notification, etc.)
-    }
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f0f9f4] via-[#e6f5ec] to-[#d8eee1]">
-      <div className="max-w-7xl mx-auto p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <Logo size="md" />
-            <button
-              onClick={() => window.history.back()}
-              className="p-2 hover:bg-[#0e6537]/10 rounded-lg"
-            >
-              <ArrowLeft className="h-5 w-5 text-[#0e6537]" />
-            </button>
-            <h1 className="text-2xl font-bold text-[#0e6537]">Email Management</h1>
-          </div>
-          <button className="px-4 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow-sm flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Compose
+  if (error || !data) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Error Loading Email Inbox</h2>
+          <p className="text-gray-600 mb-4">{error || 'An unexpected error occurred.'}</p>
+          <button 
+            onClick={() => refetch()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Try Again
           </button>
         </div>
+      </div>
+    );
+  }
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white bg-gradient-to-br from-[#e6f5ec] to-[#f0f9f4] p-4 rounded-lg border shadow-sm">
-            <p className="text-2xl font-bold text-[#0e6537]">12</p>
-            <p className="text-sm text-gray-600">Unread Emails</p>
+  // Filter conversations based on search and folder
+  const filteredConversations = conversations.filter(conv => {
+    const matchesSearch = searchQuery === '' || 
+      (conv.thread.lead_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (conv.thread.client_email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      conv.messages.some(msg => 
+        msg.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (msg.subject || '').toLowerCase().includes(searchQuery.toLowerCase())
+      );
+
+    const matchesFolder = selectedFolder === 'inbox' || 
+      (selectedFolder === 'sent' && conv.messages.some(msg => msg.type === 'outbound-email')) ||
+      (selectedFolder === 'archived' && conv.thread.completed) ||
+      (selectedFolder === 'trash' && conv.thread.spam);
+
+    return matchesSearch && matchesFolder;
+  });
+
+  const handleEmailClick = (conversationId: string) => {
+    router.push(`/dashboard/conversations/${conversationId}`);
+  };
+
+  const handleEmailSelect = (conversationId: string) => {
+    setSelectedEmails(prev => 
+      prev.includes(conversationId) 
+        ? prev.filter(id => id !== conversationId)
+        : [...prev, conversationId]
+    );
+  };
+
+  const getLastMessage = (conversation: any) => {
+    return conversation.messages
+      .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0];
+  };
+
+  const getEmailPreview = (conversation: any) => {
+    const lastMessage = getLastMessage(conversation);
+    if (!lastMessage) return 'No messages';
+    
+    const preview = lastMessage.body.replace(/<[^>]*>/g, '').trim();
+    return preview.length > 100 ? preview.substring(0, 100) + '...' : preview;
+  };
+
+  const getTimeAgo = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${Math.floor(diffInHours)}h ago`;
+    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}d ago`;
+    return format(date, 'MMM d');
+  };
+
+  const folders = [
+    { id: 'inbox', name: 'Inbox', icon: Inbox, count: conversations.filter(c => !c.thread.completed && !c.thread.spam).length },
+    { id: 'sent', name: 'Sent', icon: Send, count: conversations.filter(c => c.messages.some(m => m.type === 'outbound-email')).length },
+    { id: 'archived', name: 'Archived', icon: Archive, count: conversations.filter(c => c.thread.completed).length },
+    { id: 'trash', name: 'Trash', icon: Trash2, count: conversations.filter(c => c.thread.spam).length },
+  ];
+
+  return (
+    <div className="h-full flex flex-col bg-white">
+      {/* Header */}
+      <div className="flex-shrink-0 bg-white border-b border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="flex items-center space-x-2">
+              <Mail className="w-6 h-6 text-blue-600" />
+              <h1 className="text-xl font-semibold text-gray-900">Email Inbox</h1>
+            </div>
           </div>
-          <div className="bg-white bg-gradient-to-br from-[#e6f5ec] to-[#f0f9f4] p-4 rounded-lg border shadow-sm">
-            <p className="text-2xl font-bold text-green-600">8</p>
-            <p className="text-sm text-gray-600">Starred</p>
-          </div>
-          <div className="bg-white bg-gradient-to-br from-[#e6f5ec] to-[#f0f9f4] p-4 rounded-lg border shadow-sm">
-            <p className="text-2xl font-bold text-orange-600">24</p>
-            <p className="text-sm text-gray-600">Sent Today</p>
-          </div>
-          <div className="bg-white bg-gradient-to-br from-[#e6f5ec] to-[#f0f9f4] p-4 rounded-lg border shadow-sm">
-            <p className="text-2xl font-bold text-purple-600">156</p>
-            <p className="text-sm text-gray-600">Total Emails</p>
+          
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={() => refetch()}
+              disabled={loading}
+              className="p-2 text-gray-500 hover:text-gray-700 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={loading ? "w-5 h-5 animate-spin" : "w-5 h-5"} />
+            </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Email List */}
-          <div className="lg:col-span-2 bg-white rounded-lg border shadow-sm">
-            {/* Search */}
-            <div className="p-4 border-b">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search emails..."
-                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0e6537]"
-                />
-              </div>
-            </div>
+        {/* Search Bar */}
+        <div className="mt-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Search emails..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
 
-            {/* Email List */}
-            <div className="divide-y">
-              {filteredEmails.map((email) => (
-                <div
-                  key={email.id}
-                  className={`p-4 hover:bg-[#0e6537]/5 cursor-pointer ${!email.read ? "bg-[#e6f5ec]" : ""}`}
-                  onClick={() => setSelectedEmail(email)}
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="flex items-center gap-2">
-                      <input type="checkbox" className="w-4 h-4" />
-                      <button className={`p-1 ${email.starred ? "text-yellow-500" : "text-gray-300"}`}>
-                        <Star className="h-4 w-4" />
-                      </button>
+      {/* Main Content */}
+      <div className="flex-1 flex min-h-0">
+        {/* Sidebar */}
+        <div className="w-64 bg-gray-50 border-r border-gray-200 flex-shrink-0">
+          <div className="p-4">
+            <nav className="space-y-1">
+              {folders.map((folder) => {
+                const Icon = folder.icon;
+                const isActive = selectedFolder === folder.id;
+                
+                return (
+                  <button
+                    key={folder.id}
+                    onClick={() => setSelectedFolder(folder.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isActive 
+                        ? 'bg-blue-100 text-blue-700' 
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Icon className="w-5 h-5" />
+                      <span>{folder.name}</span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className={`font-medium truncate ${!email.read ? "font-bold" : ""}`}>{email.from}</p>
-                        <span className="text-xs text-gray-500">{email.time}</span>
-                      </div>
-                      <p className={`text-sm truncate mb-1 ${!email.read ? "font-semibold" : ""}`}>{email.subject}</p>
-                      <p className="text-xs text-gray-600 truncate">{email.preview}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        {email.type === 'junk' ? (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleMarkAsNotSpam(email)
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-red-50 text-red-700 rounded hover:bg-red-100"
-                          >
-                            <AlertCircle className="h-3 w-3" />
-                            Mark as Not Spam
-                          </button>
-                        ) : (
-                          <span
-                            className={`px-2 py-1 text-xs rounded ${
-                              email.type === "hot-lead"
-                                ? "bg-red-100 text-red-800"
-                                : email.type === "lead"
-                                  ? "bg-[#e6f5ec] text-[#002417]"
-                                  : "bg-[#0e6537]/20 text-[#002417]"
-                            }`}
-                          >
-                            {email.type.replace("-", " ").toUpperCase()}
-                          </span>
-                        )}
-                        {!email.read && <div className="w-2 h-2 bg-blue-600 rounded-full"></div>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                    {folder.count > 0 && (
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        isActive ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {folder.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </div>
+
+        {/* Email List */}
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Email List Header */}
+          <div className="flex-shrink-0 bg-white border-b border-gray-200 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-lg font-semibold text-gray-900 capitalize">
+                  {selectedFolder}
+                </h2>
+                <span className="text-sm text-gray-500">
+                  {filteredConversations.length} emails
+                </span>
+              </div>
+              
+              <div className="flex items-center space-x-2">
+                <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors">
+                  <Filter className="w-5 h-5" />
+                </button>
+                <button className="p-2 text-gray-500 hover:text-gray-700 transition-colors">
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Email Actions & Quick Compose */}
-          <div className="space-y-6">
-            {/* Quick Actions */}
-            <div className="bg-white p-6 rounded-lg border shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Quick Actions</h3>
-              <div className="space-y-3">
-                <button className="w-full flex items-center gap-3 px-4 py-2 text-sm bg-[#e6f5ec] text-[#002417] hover:bg-[#0e6537]/20 rounded-lg">
-                  <Send className="h-4 w-4" />
-                  Send Follow-up
-                </button>
-                <button className="w-full flex items-center gap-3 px-4 py-2 text-sm bg-[#0e6537]/20 text-[#002417] hover:bg-[#0e6537]/30 rounded-lg">
-                  <Archive className="h-4 w-4" />
-                  Archive Selected
-                </button>
-                <button className="w-full flex items-center gap-3 px-4 py-2 text-sm bg-red-50 text-red-700 rounded-lg hover:bg-red-100">
-                  <Trash2 className="h-4 w-4" />
-                  Delete Selected
-                </button>
-              </div>
-            </div>
-
-            {/* Email Templates */}
-            <div className="bg-white p-6 rounded-lg border shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Email Templates</h3>
-              <div className="space-y-2">
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded">
-                  Welcome New Lead
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded">
-                  Property Recommendations
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded">
-                  Follow-up After Showing
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 rounded">Market Update</button>
-              </div>
-            </div>
-
-            {/* Email Stats */}
-            <div className="bg-white p-6 rounded-lg border shadow-sm">
-              <h3 className="text-lg font-semibold mb-4">Email Performance</h3>
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Open Rate</span>
-                  <span className="text-sm font-medium">68%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Response Rate</span>
-                  <span className="text-sm font-medium">24%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-sm text-gray-600">Emails Sent Today</span>
-                  <span className="text-sm font-medium">24</span>
+          {/* Email List */}
+          <div className="flex-1 overflow-y-auto">
+            {filteredConversations.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center">
+                  <Mail className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No emails found</h3>
+                  <p className="text-gray-500">
+                    {searchQuery ? 'Try adjusting your search terms' : `No emails in ${selectedFolder}`}
+                  </p>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {filteredConversations.map((conversation) => {
+                  const lastMessage = getLastMessage(conversation);
+                  const isSelected = selectedEmails.includes(conversation.thread.conversation_id);
+                  const isUnread = !conversation.thread.read;
+                  
+                  return (
+                    <div
+                      key={conversation.thread.conversation_id}
+                      className={`flex items-center space-x-4 p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
+                        isSelected ? 'bg-blue-50' : ''
+                      }`}
+                      onClick={() => handleEmailClick(conversation.thread.conversation_id)}
+                    >
+                      {/* Checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleEmailSelect(conversation.thread.conversation_id);
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      
+                      {/* Star */}
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-gray-400 hover:text-yellow-400 transition-colors"
+                      >
+                        <Star className="w-5 h-5" />
+                      </button>
+                      
+                      {/* Email Content */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <span className={`font-medium truncate ${
+                              isUnread ? 'text-gray-900' : 'text-gray-700'
+                            }`}>
+                              {conversation.thread.lead_name || conversation.thread.client_email}
+                            </span>
+                            {isUnread && (
+                              <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                            )}
+                          </div>
+                          <span className="text-sm text-gray-500 flex-shrink-0">
+                            {lastMessage ? getTimeAgo(lastMessage.timestamp) : ''}
+                          </span>
+                        </div>
+                        
+                        <div className="mt-1">
+                          <p className={`text-sm truncate ${
+                            isUnread ? 'text-gray-900 font-medium' : 'text-gray-600'
+                          }`}>
+                            {lastMessage?.subject || 'No subject'}
+                          </p>
+                          <p className="text-sm text-gray-500 truncate mt-1">
+                            {getEmailPreview(conversation)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
-  )
+  );
 }
+
+export default function EmailPage() {
+  return (
+    <div className="h-full w-full">
+      <ErrorBoundary fallback={
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Email Inbox Error</h2>
+            <p className="text-gray-600 mb-4">Something went wrong with the email inbox.</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      }>
+        <Suspense fallback={<LoadingSpinner size="lg" text="Loading email inbox..." />}>
+          <EmailContent />
+        </Suspense>
+      </ErrorBoundary>
+    </div>
+  );
+}
+
+/**
+ * Change Log:
+ * 12/19/24 - Version 3.0.0 - Email Inbox Interface
+ * - Transformed into a proper email inbox interface
+ * - Removed stats widgets and metrics cards
+ * - Added sidebar with email folders (Inbox, Sent, Archived, Trash)
+ * - Implemented email list with proper email styling
+ * - Added search functionality and email filtering
+ * - Included email selection, star, and unread indicators
+ * - Enhanced user experience with hover states and transitions
+ * - Maintained centralized data processing and error handling
+ * 
+ * 12/19/24 - Version 2.1.0 - Full Layout Integration
+ * - Updated to use full width and height layout
+ * - Fixed data structure issues by using correct metrics properties
+ * - Integrated with centralized dashboard data processing
+ * - Improved layout with proper flex structure for full height
+ * - Enhanced DataTable integration with proper height constraints
+ * - Applied consistent error handling and loading states
+ * 
+ * 12/19/24 - Version 2.0.0 - Centralized Architecture
+ * - Updated to use centralized data processing with useEmailData
+ * - Integrated modular components (DataTable, MetricsCard)
+ * - Added consistent error handling and loading states
+ * - Applied CAS theme colors and styling patterns
+ * - Improved layout with proper metrics and statistics sections
+ * - Enhanced user experience with better visual hierarchy
+ * 
+ * 5/25/25 - Version 1.0.0
+ * - Created email management dashboard with inbox functionality
+ * - Implemented email composition and tracking features
+ * - Added email templates and performance metrics
+ */

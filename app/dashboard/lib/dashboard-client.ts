@@ -12,23 +12,31 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import type { Session } from 'next-auth';
-import type { 
-    Thread, 
-    ThreadMetrics, 
-    TimeRange, 
-    Message, 
-    MessageWithResponseId,
-    DashboardFilters,
-    LeadPerformanceData 
-} from '@/app/types/lcp';
+import type { Thread, Message, Conversation } from '@/types/conversation';
 import { goto404 } from '@/app/utils/error';
-import { ensureMessageFields, getLatestEvaluableMessage, calculateMetrics, processThreadData } from '@/app/dashboard/lib/dashboard-utils';
-import { authFetch, authFetchJson } from '@/lib/auth-utils';
+import { 
+    ensureMessageFields, 
+    getLatestEvaluableMessage, 
+    calculateMetrics, 
+    processThreadData,
+    ThreadMetrics,
+    TimeRange,
+    MessageWithResponseId,
+    LeadPerformanceData
+} from '@/app/dashboard/lib/dashboard-utils';
+import { apiClient } from '@/lib/api/client';
+
+// Define local DashboardFilters type to match the server-side definition
+interface DashboardFilters {
+    unread: boolean;
+    review: boolean;
+    completion: boolean;
+}
 
 export const useDashboard = () => {
     const { data: session, status } = useSession() as { data: Session & { user: { id: string } } | null, status: string };
     const router = useRouter();
-    const [conversations, setConversations] = useState<Thread[]>([]);
+    const [conversations, setConversations] = useState<Conversation[]>([]);
     const [loadingConversations, setLoadingConversations] = useState(false);
     const [updatingLcp, setUpdatingLcp] = useState<string | null>(null);
     const [updatingRead, setUpdatingRead] = useState<string | null>(null);
@@ -57,16 +65,18 @@ export const useDashboard = () => {
         setLoadingConversations(true);
         setLoadingLeadPerformance(true);
         try {
-            const data = await authFetchJson('/api/lcp/get_all_threads', {
+            const response = await apiClient.request('/lcp/get_all_threads', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: session.user.id }),
+                body: { userId: session.user.id },
             });
             
-            if (!data.success || !data.data) {
+            if (!response.success || !response.data) {
                 throw new Error('Invalid response format from API');
             }
-            const { conversations, leadPerformance } = processThreadData(data.data, timeRange);
+            
+            // Ensure response.data is an array
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const { conversations, leadPerformance } = processThreadData(rawData, timeRange);
             // log conversations
             setConversations(conversations);
             setLeadPerformanceData(leadPerformance);
@@ -84,24 +94,20 @@ export const useDashboard = () => {
         if (!session?.user?.id) return;
         setUpdatingRead(conversationId);
         try {
-            const response = await authFetch('/api/db/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    table_name: 'Threads',
-                    index_name: 'conversation_id-index',
-                    key_name: 'conversation_id',
-                    key_value: conversationId,
-                    update_data: { read: 'true' }
-                }),
+            const response = await apiClient.dbUpdate({
+                table_name: 'Threads',
+                index_name: 'conversation_id-index',
+                key_name: 'conversation_id',
+                key_value: conversationId,
+                update_data: { read: 'true' }
             });
             
-            if (!response.ok) throw new Error('Failed to mark as read');
+            if (!response.success) throw new Error('Failed to mark as read');
             
             // Update local state instead of reloading
             setConversations(prev => prev.map(conv => 
-                conv.conversation_id === conversationId 
-                    ? { ...conv, read: true }
+                conv.thread.conversation_id === conversationId 
+                    ? { ...conv, thread: { ...conv.thread, read: true } }
                     : conv
             ));
         } catch (error) {
@@ -113,27 +119,23 @@ export const useDashboard = () => {
 
     const toggleLeadConversion = useCallback(async (conversationId: string) => {
         if (!session?.user?.id) return;
-        const currentStatus = conversations.find(c => c.conversation_id === conversationId)?.lcp_enabled || false;
+        const currentStatus = conversations.find(c => c.thread.conversation_id === conversationId)?.thread.lcp_enabled || false;
         setUpdatingLcp(conversationId);
         try {
-            const response = await authFetch('/api/db/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    table_name: 'Threads',
-                    index_name: 'conversation_id-index',
-                    key_name: 'conversation_id',
-                    key_value: conversationId,
-                    update_data: { lcp_enabled: (!currentStatus).toString() }
-                }),
+            const response = await apiClient.dbUpdate({
+                table_name: 'Threads',
+                index_name: 'conversation_id-index',
+                key_name: 'conversation_id',
+                key_value: conversationId,
+                update_data: { lcp_enabled: (!currentStatus).toString() }
             });
             
-            if (!response.ok) throw new Error('Failed to update LCP status');
+            if (!response.success) throw new Error('Failed to update LCP status');
             
             // Update local state instead of reloading
             setConversations(prev => prev.map(conv => 
-                conv.conversation_id === conversationId 
-                    ? { ...conv, lcp_enabled: !currentStatus }
+                conv.thread.conversation_id === conversationId 
+                    ? { ...conv, thread: { ...conv.thread, lcp_enabled: !currentStatus } }
                     : conv
             ));
         } catch (error) {
@@ -147,16 +149,12 @@ export const useDashboard = () => {
         if (!session?.user?.id) return;
         setDeletingThread(conversationId);
         try {
-            const response = await authFetch('/api/lcp/delete_thread', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ conversation_id: conversationId }),
-            });
+            const response = await apiClient.deleteThread(conversationId);
             
-            if (!response.ok) throw new Error('Failed to delete thread');
+            if (!response.success) throw new Error('Failed to delete thread');
             
             // Update local state instead of reloading
-            setConversations(prev => prev.filter(conv => conv.conversation_id !== conversationId));
+            setConversations(prev => prev.filter(conv => conv.thread.conversation_id !== conversationId));
         } catch (error) {
             console.error('Error deleting thread:', error);
         } finally {
@@ -167,24 +165,14 @@ export const useDashboard = () => {
     const handleMarkAsNotSpam = async (conversationId: string) => {
         setUpdatingSpam(conversationId);
         try {
-            const response = await authFetch('/api/db/update', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    table_name: 'Threads',
-                    index_name: 'conversation_id-index',
-                    key_name: 'conversation_id',
-                    key_value: conversationId,
-                    update_data: { spam: 'false' }
-                }),
-            });
+            const response = await apiClient.markNotSpam(conversationId);
             
-            if (!response.ok) throw new Error('Failed to mark as not spam');
+            if (!response.success) throw new Error('Failed to mark as not spam');
             
             // Update local state instead of reloading
             setConversations(prev => prev.map(conv => 
-                conv.conversation_id === conversationId 
-                    ? { ...conv, spam: false }
+                conv.thread.conversation_id === conversationId 
+                    ? { ...conv, thread: { ...conv.thread, spam: false } }
                     : conv
             ));
         } catch (error) {
@@ -206,15 +194,17 @@ export const useDashboard = () => {
         if (!session?.user?.id) return;
         setRefreshingLeadPerformance(true);
         try {
-            const data = await authFetchJson('/api/lcp/get_all_threads', {
+            const response = await apiClient.request('/lcp/get_all_threads', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: session.user.id }),
+                body: { userId: session.user.id },
             });
-            if (!data.success || !data.data) {
+            if (!response.success || !response.data) {
                 throw new Error('Failed to refresh lead performance');
             }
-            const { leadPerformance } = processThreadData(data.data, timeRange);
+            
+            // Ensure response.data is an array
+            const rawData = Array.isArray(response.data) ? response.data : [];
+            const { leadPerformance } = processThreadData(rawData, timeRange);
             setLeadPerformanceData(leadPerformance);
         } catch (error) {
             console.error('Error refreshing lead performance:', error);
@@ -224,7 +214,7 @@ export const useDashboard = () => {
     }, [session]);
 
     const toggleFilter = (filter: keyof DashboardFilters) => {
-        setFilters(prev => ({ ...prev, [filter]: !prev[filter] }));
+        setFilters((prev: DashboardFilters) => ({ ...prev, [filter]: !prev[filter] }));
     };
 
     // Helper function to check if a thread is completed
@@ -237,15 +227,15 @@ export const useDashboard = () => {
     // Memoize filtered conversations to prevent recalculation on every render
     const filteredConversations = useMemo(() => {
         const filtered = conversations.filter(conv => {
-            if (conv.spam) return false;
-            if (isThreadCompleted(conv.completed)) {
+            if (conv.thread.spam) return false;
+            if (isThreadCompleted(conv.thread.completed)) {
                 return false;
             }
-            if (filters.unread && !conv.read) return true;
-            if (filters.review && conv.flag_for_review) return true;
+            if (filters.unread && !conv.thread.read) return true;
+            if (filters.review && conv.thread.flag_for_review) return true;
             if (filters.completion) {
                 const evMessage = getLatestEvaluableMessage(conv.messages);
-                return (evMessage?.ev_score ?? 0) > conv.lcp_flag_threshold && !conv.flag_for_review;
+                return (evMessage?.ev_score ?? 0) > (conv.thread.lcp_flag_threshold ?? 70) && !conv.thread.flag_for_review;
             }
             return !filters.unread && !filters.review && !filters.completion;
         });

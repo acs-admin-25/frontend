@@ -1,82 +1,91 @@
 "use client"
 
-import { Shield, FileText, ArrowLeft } from "lucide-react"
+import { useEffect } from "react"
+import { Shield, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { PageLayout } from "@/components/common/Layout/PageLayout"
+import { applyTheme, getCurrentTheme } from "@/lib/theme/simple-theme"
+import { TERMS_CONTENT } from "./constants/content"
 
 export default function TermsPage() {
+  useEffect(() => {
+    const theme = getCurrentTheme()
+    applyTheme(theme)
+  }, [])
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f0f9f4] via-[#e6f5ec] to-[#d8eee1]">
-      <div className="max-w-4xl mx-auto p-6">
-        {/* Back Button */}
+    <>
+      {/* Top Row: Back Button & Logo */}
+      <div className="w-full max-w-5xl md:max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 md:px-8 pt-6 pb-0">
         <Link 
           href="/legal"
-          className="inline-flex items-center gap-2 bg-[#0e6537] text-white px-4 py-2 rounded-lg hover:bg-[#0a5a2f] mb-4 transition-colors shadow-md"
+          className="inline-flex items-center gap-2 text-[#0e6537] hover:text-[#0a5a2f] transition-colors text-base sm:text-lg"
         >
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Legal</span>
         </Link>
-
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-[#0e6537]/20 p-6 mb-6">
-          <h1 className="text-2xl font-bold text-[#0e6537] mb-2">Terms of Service</h1>
-          <p className="text-gray-600">Please review our Terms of Service</p>
+        <Link href="/">
+          <img src="/favicon.ico" alt="ACS Logo" className="w-16 h-16 object-contain cursor-pointer" />
+        </Link>
+      </div>
+      <div className="w-full max-w-5xl md:max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+        {/* Top Bar/Header - matches legal page */}
+        <div className="bg-[#0e6537] rounded-lg shadow-2xl border border-[#0e6537]/20 p-4 sm:p-6 mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Shield className="w-5 h-5 text-white" />
+            <h1 className="text-xl sm:text-2xl font-bold text-white">{TERMS_CONTENT.header.title}</h1>
+          </div>
+          <p className="text-white/80 text-sm sm:text-base">{TERMS_CONTENT.header.subtitle}</p>
         </div>
-
-        {/* Content */}
-        <div className="bg-white rounded-lg shadow-sm border border-[#0e6537]/20 p-6">
+        {/* Main Content */}
+        <div className="bg-[var(--card)] rounded-lg shadow-sm border border-gray-300 p-4 sm:p-6 w-full max-w-5xl md:max-w-7xl mx-auto">
           <div className="space-y-6">
-            <div className="flex items-center gap-2 text-[#0e6537] mb-4">
-              <Shield className="w-5 h-5" />
-              <h2 className="text-xl font-semibold">Terms of Service</h2>
-            </div>
-
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">1. Acceptance of Terms</h3>
-              <p className="text-gray-600">
-                By accessing and using ACS, you agree to be bound by these Terms of Service and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using or accessing this site.
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{TERMS_CONTENT.sections.acceptanceOfTerms.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {TERMS_CONTENT.sections.acceptanceOfTerms.content}
               </p>
             </section>
 
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">2. Use License</h3>
-              <p className="text-gray-600">
-                Permission is granted to temporarily use ACS for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license you may not:
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{TERMS_CONTENT.sections.useLicense.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {TERMS_CONTENT.sections.useLicense.intro}
               </p>
-              <ul className="list-disc list-inside text-gray-600 space-y-2">
-                <li>Modify or copy the materials</li>
-                <li>Use the materials for any commercial purpose</li>
-                <li>Attempt to decompile or reverse engineer any software contained on ACS</li>
-                <li>Remove any copyright or other proprietary notations from the materials</li>
+              <ul className="list-disc list-inside text-[var(--text-secondary)] space-y-2 text-sm sm:text-base">
+                {TERMS_CONTENT.sections.useLicense.list.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
               </ul>
             </section>
 
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">3. User Responsibilities</h3>
-              <p className="text-gray-600">
-                As a user of ACS, you are responsible for:
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{TERMS_CONTENT.sections.userResponsibilities.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {TERMS_CONTENT.sections.userResponsibilities.intro}
               </p>
-              <ul className="list-disc list-inside text-gray-600 space-y-2">
-                <li>Maintaining the confidentiality of your account</li>
-                <li>All activities that occur under your account</li>
-                <li>Providing accurate and complete information</li>
-                <li>Complying with all applicable laws and regulations</li>
+              <ul className="list-disc list-inside text-[var(--text-secondary)] space-y-2 text-sm sm:text-base">
+                {TERMS_CONTENT.sections.userResponsibilities.list.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
               </ul>
             </section>
 
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">4. Service Modifications</h3>
-              <p className="text-gray-600">
-                ACS reserves the right to modify or discontinue, temporarily or permanently, the service with or without notice. We shall not be liable to you or any third party for any modification, suspension, or discontinuance of the service.
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{TERMS_CONTENT.sections.serviceModifications.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {TERMS_CONTENT.sections.serviceModifications.content}
               </p>
             </section>
           </div>
         </div>
-
-        {/* Last Updated */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          Last updated: {new Date().toLocaleDateString()}
+        <div className="mt-6 text-center text-xs sm:text-sm text-[var(--text-muted)] w-full max-w-5xl md:max-w-7xl mx-auto">
+          {TERMS_CONTENT.footer.lastUpdated} {new Date().toLocaleDateString()}
+        </div>
+        <div className="mb-4 text-center text-xs text-gray-400 w-full max-w-5xl md:max-w-7xl mx-auto">
+          {TERMS_CONTENT.footer.copyright}
         </div>
       </div>
-    </div>
+    </>
   )
-} 
+}

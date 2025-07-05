@@ -3,8 +3,9 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { handleSessionCookie, getAuthRedirectPath, validateSession } from '../utils/auth';
-import { goto404 } from '../utils/error';
+import { handleSessionCookie, getAuthRedirectPath, validateSession } from '@/lib/auth/auth-utils';
+import { PageLayout } from '@/components/common/Layout/PageLayout';
+import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
 
 export default function ProcessGoogle() {
     const router = useRouter();
@@ -20,8 +21,15 @@ export default function ProcessGoogle() {
                         throw new Error('Invalid session data');
                     }
 
-                    // Handle session cookie
-                    handleSessionCookie(session as any);
+                    // Handle session cookie - extract session_id from NextAuth session
+                    if ((session as any).sessionId) {
+                        const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
+                        const cookieString = `session_id=${(session as any).sessionId}; path=/; samesite=lax${secure}`;
+                        document.cookie = cookieString;
+                        console.log('Set session_id cookie from NextAuth session:', (session as any).sessionId);
+                    } else {
+                        console.warn('No session_id found in NextAuth session');
+                    }
 
                     // Determine redirect based on auth type
                     const user = (session.user as any);
@@ -30,7 +38,7 @@ export default function ProcessGoogle() {
                         router.push(redirectPath);
                     }
                     else {
-                        goto404('405', 'User not found', router);
+                        router.push('/login?error=auth_processing_failed');
                     }
                 } catch (error) {
                     // Keep error logging for debugging purposes
@@ -45,13 +53,9 @@ export default function ProcessGoogle() {
         processAuth();
     }, [status, session, router]);
 
-    // Return a minimal loading state
     return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0A2F1F]">
-            <div className="text-white text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white mx-auto mb-4"></div>
-                <p>Processing your login...</p>
-            </div>
-        </div>
+        <PageLayout>
+            <LoadingSpinner text="Processing your login..." size="lg" />
+        </PageLayout>
     );
 }

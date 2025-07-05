@@ -2,6 +2,8 @@
 import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { PageLayout } from "@/components/common/Layout/PageLayout";
+import { LoadingSpinner } from "@/components/common/Feedback/LoadingSpinner";
 
 function ProcessFormContent() {
   const router = useRouter();
@@ -9,15 +11,19 @@ function ProcessFormContent() {
   const { data: session, status } = useSession();
 
   useEffect(() => {
-    if (status === "loading") return; // Wait for session to load
+    if (status === "loading") return;
 
-    // Get session_id from session (not from URL)
-    if (session && session.sessionId) {
-      const sessionId = session.sessionId;
+    if (session) {
       const authType = searchParams.get("authType");
 
-      if (sessionId) {
-        document.cookie = `session_id=${sessionId}; path=/; SameSite=Lax`;
+      // Extract session_id from NextAuth session
+      if ((session as any).sessionId) {
+        const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
+        const cookieString = `session_id=${(session as any).sessionId}; path=/; samesite=lax${secure}`;
+        document.cookie = cookieString;
+        console.log('Set session_id cookie from NextAuth session:', (session as any).sessionId);
+      } else {
+        console.warn('No session_id found in NextAuth session');
       }
 
       if (authType === "new") {
@@ -25,28 +31,24 @@ function ProcessFormContent() {
       } else {
         router.replace("/dashboard");
       }
+    } else if (status === 'unauthenticated') {
+        router.replace('/login');
     }
   }, [router, searchParams, session, status]);
 
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
-      <h2 className="text-lg font-semibold mb-4">Processing your login...</h2>
-    </div>
-  );
+  return <LoadingSpinner text="Processing your login..." size="lg" />;
 }
 
 function ProcessFormFallback() {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-screen">
-      <h2 className="text-lg font-semibold mb-4">Processing your login...</h2>
-    </div>
-  );
+  return <LoadingSpinner text="Processing your login..." size="lg" />;
 }
 
 export default function ProcessForm() {
   return (
-    <Suspense fallback={<ProcessFormFallback />}>
-      <ProcessFormContent />
-    </Suspense>
+    <PageLayout>
+        <Suspense fallback={<ProcessFormFallback />}>
+            <ProcessFormContent />
+        </Suspense>
+    </PageLayout>
   );
 } 

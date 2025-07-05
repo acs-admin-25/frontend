@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { config } from '@/lib/local-api-config';
+import { config } from '@/lib/config/local-api-config';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/types/auth';
+import { authOptions } from '@/lib/auth/auth-options';
 import { Session } from 'next-auth';
 
 export async function POST(request: Request) {
@@ -18,7 +18,22 @@ export async function POST(request: Request) {
     // Get session using getServerSession with authOptions
     const session = await getServerSession(authOptions) as Session & { user: { id: string } };
     
+    // Debug session information
+    console.log('[db/delete] Session debug:', {
+      hasSession: !!session,
+      hasUser: !!session?.user,
+      userId: session?.user?.id,
+      userEmail: session?.user?.email,
+      sessionKeys: session ? Object.keys(session) : [],
+      userKeys: session?.user ? Object.keys(session.user) : []
+    });
+    
     if (!session?.user?.id) {
+      console.error('[db/delete] No user ID in session:', {
+        session: session ? 'exists' : 'null',
+        user: session?.user ? 'exists' : 'null',
+        userId: session?.user?.id || 'undefined'
+      });
       return NextResponse.json(
         { error: 'Unauthorized - No authenticated user found' },
         { status: 401 }
@@ -37,6 +52,21 @@ export async function POST(request: Request) {
     // Construct the API URL with parameters
     const apiUrl = `${config.API_URL}/db/delete`;
     
+    // Prepare request body with debugging - use key_name/key_value pattern
+    const requestBody = {
+      table_name,
+      key_name: attribute_name,           // Convert attribute_name to key_name
+      key_value: attribute_value,         // Convert attribute_value to key_value
+      index_name: `${attribute_name}-index`, // Add index_name based on the key
+      account_id: session.user.id,
+      session_id: sessionId
+    };
+    
+    console.log('[db/delete] Request body being sent to backend:', {
+      ...requestBody,
+      key_value: typeof attribute_value === 'string' ? attribute_value.substring(0, 10) + '...' : attribute_value
+    });
+    
     // Make the request to the API
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -44,13 +74,7 @@ export async function POST(request: Request) {
         'Content-Type': 'application/json',
         ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
       },
-      body: JSON.stringify({
-        table_name,
-        attribute_name,
-        attribute_value,
-        is_primary_key,
-        account_id: session.user.id
-      }),
+      body: JSON.stringify(requestBody),
       credentials: 'include',
     });
 
@@ -65,9 +89,11 @@ export async function POST(request: Request) {
         url: apiUrl,
         requestBody: {
           table_name,
-          attribute_name,
-          attribute_value: typeof attribute_value === 'string' ? attribute_value.substring(0, 10) + '...' : attribute_value,
-          is_primary_key
+          key_name: attribute_name,
+          key_value: typeof attribute_value === 'string' ? attribute_value.substring(0, 10) + '...' : attribute_value,
+          index_name: `${attribute_name}-index`,
+          account_id: session.user.id,
+          session_id: sessionId
         }
       });
       

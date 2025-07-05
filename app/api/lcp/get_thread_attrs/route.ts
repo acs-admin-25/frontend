@@ -1,4 +1,4 @@
-import { config } from '@/lib/local-api-config';
+import { config } from '@/lib/config/local-api-config';
 import { NextResponse } from 'next/server';
 
 export async function POST(request: Request) {

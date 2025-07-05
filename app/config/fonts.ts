@@ -1,6 +1,6 @@
 import { Inter, Playfair_Display, Montserrat } from 'next/font/google';
 
-// Primary font for body text and general content
+// Primary font for body text and general content - Professional and clean
 export const inter = Inter({
     subsets: ['latin'],
     display: 'swap',
@@ -9,7 +9,7 @@ export const inter = Inter({
     fallback: ['system-ui', 'arial'],
 });
 
-// Display font for headings and featured text
+// Display font for headings and featured text - Professional serif
 export const playfair = Playfair_Display({
     subsets: ['latin'],
     display: 'swap',
@@ -18,7 +18,7 @@ export const playfair = Playfair_Display({
     fallback: ['Georgia', 'serif'],
 });
 
-// Secondary font for navigation and UI elements
+// Secondary font for navigation and UI elements - Clean and modern
 export const montserrat = Montserrat({
     subsets: ['latin'],
     display: 'swap',
@@ -36,9 +36,9 @@ export const getFontClasses = () => {
     ].join(' ');
 };
 
-// CSS variables for font families
+// CSS variables for font families - Inter as primary professional font
 export const fontFamilies = {
-    sans: 'var(--font-inter)',
-    display: 'var(--font-playfair)',
-    ui: 'var(--font-montserrat)',
+    sans: 'var(--font-inter)', // Primary professional font
+    display: 'var(--font-playfair)', // Professional serif for headings
+    ui: 'var(--font-montserrat)', // Clean UI font
 }; 

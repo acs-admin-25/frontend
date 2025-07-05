@@ -1,6 +1,6 @@
 // src/app/api/auth/login/route.ts
 import { NextResponse } from 'next/server';
-import { config } from '@/lib/local-api-config';
+import { config } from '@/lib/config/local-api-config';
 
 export async function POST(request: Request) {
     try {
@@ -33,6 +33,15 @@ export async function POST(request: Request) {
         // Get the session cookie from the API response
         const setCookieHeader = response.headers.get('set-cookie');
 
+        // Extract session_id from the cookie header
+        let sessionId = null;
+        if (setCookieHeader) {
+            const sessionIdMatch = setCookieHeader.match(/session_id=([^;,\s]+)/);
+            if (sessionIdMatch?.[1]) {
+                sessionId = sessionIdMatch[1];
+            }
+        }
+
         // Compose user fields for the frontend
         const user = {
             id: data.id || data._id,
@@ -46,6 +55,7 @@ export async function POST(request: Request) {
             success: true,
             message: 'Login successful!',
             user,
+            sessionId, // Include session_id in response body
         }, { status: 200 });
 
         // Handle the session_id cookie from the API response

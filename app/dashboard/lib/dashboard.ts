@@ -8,13 +8,23 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import type { 
-    Thread, 
-    ThreadOperationResult, 
-    TimeRange, 
-    DashboardFilters 
-} from '@/app/types/lcp';
+import type { Conversation, Thread } from '@/types/conversation';
 import { processThreadData, getLatestEvaluableMessage } from './dashboard-utils';
+
+// Define local types for dashboard functionality
+export type TimeRange = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+
+export interface DashboardFilters {
+  unread: boolean;
+  review: boolean;
+  completion: boolean;
+}
+
+export interface ThreadOperationResult {
+  success: boolean;
+  data?: any;
+  error?: string;
+}
 
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 const REQUEST_THROTTLE = 1000; // 1 second
@@ -75,11 +85,19 @@ class DashboardServerApi {
     }
 
     async updateThread(conversationId: string, updates: Partial<Thread>) {
-        return this.request<ThreadOperationResult>('lcp/update_thread', 'POST', { conversationId, updates }, ['threads']);
+        // Use db/update instead of the non-existent lcp/update_thread endpoint
+        const dbUpdateParams = {
+            table_name: 'Threads',
+            index_name: 'conversation_id-index',
+            key_name: 'conversation_id',
+            key_value: conversationId,
+            update_data: updates
+        };
+        return this.request<ThreadOperationResult>('db/update', 'POST', dbUpdateParams, ['threads']);
     }
 
     async deleteThread(conversationId: string) {
-        return this.request<ThreadOperationResult>('lcp/delete_thread', 'POST', { conversationId }, ['threads']);
+        return this.request<ThreadOperationResult>('lcp/delete_thread', 'POST', { conversation_id: conversationId }, ['threads']);
     }
 
     clearCache() {
@@ -99,21 +117,23 @@ export async function getDashboardData(userId: string, timeRange: TimeRange, fil
 
         const { conversations, metrics, leadPerformance } = processThreadData(result.data, timeRange);
         const filterCounts = {
-            unread: conversations.filter(c => !c.read).length,
-            review: conversations.filter(c => c.flag_for_review).length,
-            completion: conversations.filter(c => {
-                const evMessage = getLatestEvaluableMessage(c.messages);
-                return (evMessage?.ev_score ?? 0) > c.lcp_flag_threshold && !c.flag_for_review;
+            unread: conversations.filter((conv: Conversation) => !conv.thread.read).length,
+            review: conversations.filter((conv: Conversation) => conv.thread.flag_for_review).length,
+            completion: conversations.filter((conv: Conversation) => {
+                const evMessage = getLatestEvaluableMessage(conv.messages);
+                const threshold = conv.thread.lcp_flag_threshold ?? 70; // Default threshold
+                return (evMessage?.ev_score ?? 0) > threshold && !conv.thread.flag_for_review;
             }).length,
         };
 
-        const filteredConversations = conversations.filter(conv => {
-            if (conv.spam) return false;
-            if (filters.unread && !conv.read) return true;
-            if (filters.review && conv.flag_for_review) return true;
+        const filteredConversations = conversations.filter((conv: Conversation) => {
+            if (conv.thread.spam) return false;
+            if (filters.unread && !conv.thread.read) return true;
+            if (filters.review && conv.thread.flag_for_review) return true;
             if (filters.completion) {
                 const evMessage = getLatestEvaluableMessage(conv.messages);
-                return (evMessage?.ev_score ?? 0) > conv.lcp_flag_threshold && !conv.flag_for_review;
+                const threshold = conv.thread.lcp_flag_threshold ?? 70; // Default threshold
+                return (evMessage?.ev_score ?? 0) > threshold && !conv.thread.flag_for_review;
             }
             return !filters.unread && !filters.review && !filters.completion;
         });

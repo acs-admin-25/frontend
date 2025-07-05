@@ -2,87 +2,91 @@
 
 import { Lock, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { useEffect } from "react"
+import { PageLayout } from "@/components/common/Layout/PageLayout"
+import { applyTheme, getCurrentTheme } from "@/lib/theme/simple-theme"
+import { PRIVACY_CONTENT } from "./constants/content"
 
 export default function PrivacyPage() {
+  useEffect(() => {
+    applyTheme(getCurrentTheme());
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f0f9f4] via-[#e6f5ec] to-[#d8eee1]">
-      <div className="max-w-4xl mx-auto p-6">
-        {/* Back Button */}
+    <>
+      {/* Top Row: Back Button & Logo */}
+      <div className="w-full max-w-5xl md:max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 md:px-8 pt-6 pb-0">
         <Link 
           href="/legal"
-          className="inline-flex items-center gap-2 bg-[#0e6537] text-white px-4 py-2 rounded-lg hover:bg-[#0a5a2f] mb-4 transition-colors shadow-md"
+          className="inline-flex items-center gap-2 text-[#0e6537] hover:text-[#0a5a2f] transition-colors text-base sm:text-lg"
         >
           <ArrowLeft className="w-5 h-5" />
           <span>Back to Legal</span>
         </Link>
-
-        {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-[#0e6537]/20 p-6 mb-6">
-          <h1 className="text-2xl font-bold text-[#0e6537] mb-2">Privacy Policy</h1>
-          <p className="text-gray-600">Please review our Privacy Policy</p>
+        <Link href="/">
+          <img src="/favicon.ico" alt="ACS Logo" className="w-16 h-16 object-contain cursor-pointer" />
+        </Link>
+      </div>
+      <div className="w-full max-w-5xl md:max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-6">
+        {/* Top Bar/Header - matches legal/terms */}
+        <div className="bg-[#0e6537] rounded-lg shadow-2xl border border-[#0e6537]/20 p-4 sm:p-6 mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Lock className="w-5 h-5 text-white" />
+            <h1 className="text-xl sm:text-2xl font-bold text-white">{PRIVACY_CONTENT.header.title}</h1>
+          </div>
+          <p className="text-white/80 text-sm sm:text-base">{PRIVACY_CONTENT.header.subtitle}</p>
         </div>
-
-        {/* Content */}
-        <div className="bg-white rounded-lg shadow-sm border border-[#0e6537]/20 p-6">
+        {/* Main Content */}
+        <div className="bg-[var(--card)] rounded-lg shadow-sm border border-gray-300 p-4 sm:p-6 w-full max-w-5xl md:max-w-7xl mx-auto">
           <div className="space-y-6">
-            <div className="flex items-center gap-2 text-[#0e6537] mb-4">
-              <Lock className="w-5 h-5" />
-              <h2 className="text-xl font-semibold">Privacy Policy</h2>
-            </div>
-
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">1. Information We Collect</h3>
-              <p className="text-gray-600">
-                We collect information that you provide directly to us, including:
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{PRIVACY_CONTENT.sections.informationWeCollect.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.informationWeCollect.intro}
               </p>
-              <ul className="list-disc list-inside text-gray-600 space-y-2">
-                <li>Account information (name, email, phone number)</li>
-                <li>Communication data</li>
-                <li>Usage data and preferences</li>
-                <li>Device and connection information</li>
+              <ul className="list-disc list-inside text-[var(--text-secondary)] space-y-2 text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.informationWeCollect.list.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
               </ul>
             </section>
-
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">2. How We Use Your Information</h3>
-              <p className="text-gray-600">
-                We use the information we collect to:
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{PRIVACY_CONTENT.sections.howWeUseInformation.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.howWeUseInformation.intro}
               </p>
-              <ul className="list-disc list-inside text-gray-600 space-y-2">
-                <li>Provide and maintain our services</li>
-                <li>Improve and personalize your experience</li>
-                <li>Communicate with you about our services</li>
-                <li>Protect against fraud and abuse</li>
+              <ul className="list-disc list-inside text-[var(--text-secondary)] space-y-2 text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.howWeUseInformation.list.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
               </ul>
             </section>
-
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">3. Data Security</h3>
-              <p className="text-gray-600">
-                We implement appropriate technical and organizational measures to protect your personal information against unauthorized access, alteration, disclosure, or destruction.
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{PRIVACY_CONTENT.sections.dataSecurity.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.dataSecurity.content}
               </p>
             </section>
-
             <section className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900">4. Your Rights</h3>
-              <p className="text-gray-600">
-                You have the right to:
+              <h3 className="text-base sm:text-lg font-medium text-[var(--foreground)]">{PRIVACY_CONTENT.sections.yourRights.title}</h3>
+              <p className="text-[var(--text-secondary)] text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.yourRights.intro}
               </p>
-              <ul className="list-disc list-inside text-gray-600 space-y-2">
-                <li>Access your personal information</li>
-                <li>Correct inaccurate data</li>
-                <li>Request deletion of your data</li>
-                <li>Object to processing of your data</li>
+              <ul className="list-disc list-inside text-[var(--text-secondary)] space-y-2 text-sm sm:text-base">
+                {PRIVACY_CONTENT.sections.yourRights.list.map((item, index) => (
+                  <li key={index}>{item}</li>
+                ))}
               </ul>
             </section>
           </div>
         </div>
-
-        {/* Last Updated */}
-        <div className="mt-6 text-center text-sm text-gray-500">
-          Last updated: {new Date().toLocaleDateString()}
+        <div className="mt-6 text-center text-xs sm:text-sm text-[var(--text-muted)] w-full max-w-5xl md:max-w-7xl mx-auto">
+          {PRIVACY_CONTENT.footer.lastUpdated} {new Date().toLocaleDateString()}
+        </div>
+        <div className="mb-4 text-center text-xs text-gray-400 w-full max-w-5xl md:max-w-7xl mx-auto">
+          {PRIVACY_CONTENT.footer.copyright}
         </div>
       </div>
-    </div>
+    </>
   )
-} 
+}

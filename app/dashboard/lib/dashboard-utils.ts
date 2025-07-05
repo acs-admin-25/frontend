@@ -8,13 +8,40 @@
 
 import type { 
     Thread, 
-    ThreadMetrics, 
-    TimeRange, 
-    Message, 
-    MessageWithResponseId,
-    LeadPerformanceData 
-} from '@/app/types/lcp';
+    Message,
+    Conversation
+} from '@/types/conversation';
 import { formatLocalDate, formatLocalTime } from '@/app/utils/timezone';
+import { 
+  sortMessagesByDate, 
+  getMostRecentMessage, 
+  getLatestEvaluableMessage as getLatestEvaluableMessageUtil
+} from '@/lib/utils/conversation';
+import { processThreadsResponse } from '@/lib/utils/api';
+import { ensureLocalDate, compareDates, getSafeTime } from '@/lib/utils/date';
+
+// Define local types for dashboard functionality
+export interface ThreadMetrics {
+    newLeads: number;
+    pendingReplies: number;
+    unopenedLeads: number;
+}
+
+export interface MessageWithResponseId extends Message {
+    response_id: string;
+}
+
+export type TimeRange = 'today' | 'week' | 'month' | 'quarter' | 'year' | 'all';
+
+export interface LeadPerformanceData {
+    threadId: string;
+    score: number;
+    timestamp: string;
+    startTimestamp: string;
+    endTimestamp: string;
+    source: string;
+    sourceName: string;
+}
 
 // Define a type for the processed thread that matches our Thread type
 type ProcessedThread = {
@@ -46,7 +73,7 @@ type ProcessedThread = {
 export const parseBoolean = (value: any): boolean => {
     if (typeof value === 'boolean') return value;
     if (typeof value === 'string') return value.toLowerCase() === 'true';
-    if (typeof value === 'number') return value === 1;
+    if (typeof value === 'number') return value !== 0;
     return false;
 };
 
@@ -60,6 +87,8 @@ export const ensureMessageFields = (msg: any): Message => ({
     subject: msg.subject || '',
     timestamp: msg.timestamp,
     localDate: formatLocalTime(msg.timestamp, undefined, msg.type as 'inbound-email' | 'outbound-email'),
+    sender_name: msg.sender_name || msg.sender || '',
+    sender_email: msg.sender_email || msg.sender || '',
     sender: msg.sender,
     recipient: msg.recipient || msg.receiver,
     receiver: msg.receiver || msg.recipient,
@@ -68,31 +97,42 @@ export const ensureMessageFields = (msg: any): Message => ({
     in_reply_to: msg.in_reply_to || null,
     is_first_email: parseBoolean(msg.is_first_email),
     metadata: msg.metadata || {},
+    read: parseBoolean(msg.read),
 });
 
 export const getLatestEvaluableMessage = (messages: Message[]): MessageWithResponseId | undefined => {
     if (!messages?.length) return undefined;
     return messages
         .filter((msg): msg is MessageWithResponseId => Boolean(msg.response_id))
-        .sort((a, b) => b.localDate.getTime() - a.localDate.getTime())[0];
+        .sort((a, b) => compareDates(a.localDate, b.localDate, false))[0];
 };
 
-export const calculateMetrics = (threads: Thread[], timeRange: TimeRange): ThreadMetrics => {
-    if (!threads.length) return { newLeads: 0, pendingReplies: 0, unopenedLeads: 0 };
+export const calculateMetrics = (conversations: any[], timeRange: TimeRange): ThreadMetrics => {
+    if (!conversations.length) return { newLeads: 0, pendingReplies: 0, unopenedLeads: 0 };
 
     const now = new Date();
     const startDate = getStartDate(timeRange, now);
 
     // Exclude spam and completed threads from metrics
-    const nonSpamNonCompletedThreads = threads.filter(thread => !thread.spam && !thread.completed);
+    const nonSpamNonCompletedThreads = conversations.filter(conversation => {
+        const thread = conversation.thread || conversation;
+        return !thread.spam && !thread.completed;
+    });
 
-    return nonSpamNonCompletedThreads.reduce((metrics, thread) => {
-        const messages = thread.messages || [];
-        const latestMessage = messages[0];
+    return nonSpamNonCompletedThreads.reduce((metrics, conversation) => {
+        const thread = conversation.thread || conversation;
+        const latestMessage = getMostRecentMessage(conversation);
 
         if (!thread.read) metrics.unopenedLeads++;
         if (latestMessage?.type === 'inbound-email') metrics.pendingReplies++;
-        if (latestMessage && latestMessage.localDate >= startDate) metrics.newLeads++;
+        
+        // Ensure localDate is a valid Date object
+        if (latestMessage) {
+            const messageDate = ensureLocalDate(latestMessage.localDate);
+            if (messageDate >= startDate) {
+                metrics.newLeads++;
+            }
+        }
 
         return metrics;
     }, { newLeads: 0, pendingReplies: 0, unopenedLeads: 0 });
@@ -101,10 +141,12 @@ export const calculateMetrics = (threads: Thread[], timeRange: TimeRange): Threa
 const getStartDate = (timeRange: TimeRange, now: Date): Date => {
     const startDate = new Date(now);
     switch (timeRange) {
-        case 'day': startDate.setHours(0, 0, 0, 0); break;
+        case 'today': startDate.setHours(0, 0, 0, 0); break;
         case 'week': startDate.setDate(now.getDate() - 7); break;
         case 'month': startDate.setMonth(now.getMonth() - 1); break;
+        case 'quarter': startDate.setMonth(Math.floor(now.getMonth() / 3) * 3); break;
         case 'year': startDate.setFullYear(now.getFullYear() - 1); break;
+        case 'all': startDate.setTime(0); break;
     }
     return startDate;
 };
@@ -115,78 +157,69 @@ export const processThreadData = (rawData: any[], timeRange: TimeRange) => {
         return { conversations: [], metrics: { newLeads: 0, pendingReplies: 0, unopenedLeads: 0 }, leadPerformance: [] };
     }
 
-    const sortedData = [...rawData].sort((a, b) => {
-        const aLatest = a?.messages?.[0]?.localDate || new Date(0);
-        const bLatest = b?.messages?.[0]?.localDate || new Date(0);
-        return bLatest.getTime() - aLatest.getTime();
+    // Use centralized processing to ensure consistent Conversation objects
+    const conversations = processThreadsResponse(rawData);
+    
+    // Sort conversations by most recent message
+    const sortedConversations = [...conversations].sort((a, b) => {
+        const aLatest = getMostRecentMessage(a);
+        const bLatest = getMostRecentMessage(b);
+        
+        // Ensure localDate is a valid Date object
+        const aTime = aLatest ? getSafeTime(aLatest.localDate) : 0;
+        const bTime = bLatest ? getSafeTime(bLatest.localDate) : 0;
+        
+        return bTime - aTime;
     });
 
-    const conversations = sortedData.map(item => {
-        if (!item || typeof item !== 'object') {
-            console.warn('Invalid thread item:', item);
-            return null;
-        }
-
-        const thread = item.thread || item;
-        if (!thread || typeof thread !== 'object') {
-            console.warn('Invalid thread data:', thread);
-            return null;
-        }
-
-
-        const processedThread: ProcessedThread = {
-            conversation_id: thread.conversation_id || thread.id || '',
-            associated_account: thread.associated_account || thread.sender || '',
-            name: thread.name || 'Unnamed Conversation',
-            flag_for_review: parseBoolean(thread.flag_for_review),
-            flag_review_override: parseBoolean(thread.flag_review_override),
-            read: parseBoolean(thread.read),
-            busy: parseBoolean(thread.busy),
-            spam: parseBoolean(thread.spam),
-            lcp_enabled: parseBoolean(thread.lcp_enabled),
-            lcp_flag_threshold: typeof thread.lcp_flag_threshold === 'number' ? thread.lcp_flag_threshold : Number(thread.lcp_flag_threshold) || 70,
-            messages: Array.isArray(item.messages) ? item.messages.map(ensureMessageFields) : [],
-            ai_summary: thread.ai_summary || '',
-            source: thread.source || '',
-            source_name: thread.source_name || '',
-            budget_range: thread.budget_range || '',
-            preferred_property_types: thread.preferred_property_types || '',
-            timeline: thread.timeline || '',
-            last_updated: thread.last_updated || thread.updated_at || new Date().toISOString(),
-            created_at: thread.created_at || new Date().toISOString(),
-            updated_at: thread.updated_at || new Date().toISOString(),
-            flag: parseBoolean(thread.flag),
-            completed: parseBoolean(thread.completed)
-        };
-
-        // Print the processed thread data to console
-        return processedThread as unknown as Thread;
-    }).filter((thread): thread is Thread => thread !== null);
-
-    const metrics = calculateMetrics(conversations, timeRange);
-    const leadPerformance = conversations
-        .filter(thread => thread.messages?.[0])
-        .map(thread => {
-            const messages = thread.messages || [];
+    const metrics = calculateMetrics(sortedConversations, timeRange);
+    
+    const leadPerformance = sortedConversations
+        .filter(conversation => conversation.messages?.[0])
+        .map(conversation => {
+            const messages = conversation.messages || [];
             const evMessage = getLatestEvaluableMessage(messages);
-            const firstMessage = messages[messages.length - 1];
-            const lastMessage = messages[0];
+            const sortedMessages = sortMessagesByDate(messages, true);
+            const firstMessage = sortedMessages[0];
+            const lastMessage = sortedMessages[sortedMessages.length - 1];
 
             return {
-                threadId: thread.conversation_id,
+                threadId: conversation.thread.conversation_id,
                 score: evMessage?.ev_score || 0,
                 timestamp: evMessage?.timestamp || new Date().toISOString(),
                 startTimestamp: firstMessage?.timestamp || new Date().toISOString(),
                 endTimestamp: lastMessage?.timestamp || new Date().toISOString(),
-                source: thread.source || '',
-                sourceName: thread.source_name || '',
+                source: conversation.thread.source_name || '',
+                sourceName: conversation.thread.source_name || '',
             };
         });
 
-    return { conversations, metrics, leadPerformance };
+    return { 
+        conversations: sortedConversations, 
+        metrics, 
+        leadPerformance 
+    };
 };
 
 // Helper function to check if a thread is completed
 export const isThreadCompleted = (completed: boolean | string | undefined): boolean => {
     return parseBoolean(completed);
+};
+
+/**
+ * Ensures all messages in a conversation have proper localDate fields
+ * This should be called whenever raw message data is received
+ */
+export const ensureMessageLocalDates = (messages: any[]): Message[] => {
+  if (!Array.isArray(messages)) return [];
+  
+  return messages.map(msg => {
+    if (msg.localDate instanceof Date) {
+      // Already processed, return as is
+      return msg as Message;
+    }
+    
+    // Process the message to ensure it has localDate
+    return ensureMessageFields(msg);
+  });
 }; 

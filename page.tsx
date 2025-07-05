@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { resourcesData, ResourceSection, ResourceItem } from "./resources-data";
+import { ResourceSection, ResourceItem } from "./types/resources";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
@@ -72,6 +72,13 @@ const featureIcons: { [key: string]: React.ComponentType<any> } = {
   "Lead Scoring": Star,
   "Account Management": Settings,
 };
+
+const allSections: ResourceSection[] = [
+  // import and add all modularized sections here, e.g.:
+  // gettingStartedSection,
+  // coreFeaturesSection,
+  // ...
+];
 
 export default function ResourcesPage() {
   const [activeTab, setActiveTab] = useState("getting-started");
@@ -194,7 +201,7 @@ export default function ResourcesPage() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9 h-auto p-1 bg-gray-100 dark:bg-gray-800">
-          {resourcesData.map((section) => {
+          {allSections.map((section) => {
             const IconComponent = iconMap[section.id] || BookOpen;
             return (
               <TabsTrigger
@@ -209,7 +216,7 @@ export default function ResourcesPage() {
           })}
         </TabsList>
 
-        {resourcesData.map((section) => (
+        {allSections.map((section) => (
           <TabsContent key={section.id} value={section.id} className="mt-6">
             <div className="mb-6">
               <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -306,4 +313,4 @@ const ChevronDown = ({ className }: { className?: string }) => (
       d="M19 9l-7 7-7-7"
     />
   </svg>
-); 
+);

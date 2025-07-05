@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
-import config from '@/lib/emailconfig';
+import config from '@/lib/config/emailconfig';
 
 export async function POST(req: NextRequest) {
   console.log('Contact API: Request received');

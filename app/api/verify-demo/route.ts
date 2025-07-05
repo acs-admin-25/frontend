@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { config } from '../../../lib/config';
+import { config } from '@/lib/config/config';
 
 /**
  * POST handler for demo code verification

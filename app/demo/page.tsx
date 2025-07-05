@@ -8,11 +8,15 @@
 
 "use client"
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff } from 'lucide-react'
+import { Eye, EyeOff, ArrowRight, UserPlus, LogIn, Lock, Info, CheckCircle, AlertTriangle } from 'lucide-react'
+import { useApi } from '@/lib/hooks/useApi'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
+import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner'
 
 /**
  * DemoPage Component
@@ -23,7 +27,7 @@ import { Eye, EyeOff } from 'lucide-react'
  * - ACS brand design consistency
  * - Error handling and validation
  * - Loading states
- * - Navigation to login/signup after verification
+ * - Navigation options to login/signup after verification
  * - Responsive design
  * - Password visibility toggle
  * 
@@ -33,302 +37,215 @@ import { Eye, EyeOff } from 'lucide-react'
  * - Error state
  * - Success state
  * - Password visibility state
+ * - Verification completed state
  * 
  * @returns {JSX.Element} Complete demo access page
  */
 const DemoPage = () => {
   const router = useRouter()
   const [demoCode, setDemoCode] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [verify, setVerify] = useState(false)
+  const [verificationCompleted, setVerificationCompleted] = useState(false)
 
-  /**
-   * Handles demo code input changes
-   * @param {React.ChangeEvent<HTMLInputElement>} e - Input change event
-   */
+  const { data, loading, error, refetch } = useApi<any>('verify-demo', {
+    method: 'POST',
+    body: { demoCode },
+    enabled: verify,
+    onSuccess: () => {
+      setVerificationCompleted(true)
+    }
+  })
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDemoCode(e.target.value)
-    setError(null) // Clear error when user starts typing
   }
 
-  /**
-   * Toggles password visibility
-   */
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword)
   }
 
-  /**
-   * Handles form submission for demo code verification
-   * Validates the demo code and redirects to login/signup on success
-   * @param {React.FormEvent} e - Form submission event
-   */
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch('/api/verify-demo', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ demoCode }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccess(true)
-        // Redirect to login page after a brief delay
-        setTimeout(() => {
-          router.push('/login')
-        }, 1500)
-      } else {
-        setError(data.error || 'Invalid demo code')
-      }
-    } catch (err) {
-      setError('Network error. Please try again.')
-    } finally {
-      setLoading(false)
-    }
+    e.preventDefault();
+    setVerify(true);
   }
 
+  const handleNavigation = (route: string) => {
+    router.push(route)
+  }
+
+  useEffect(() => {
+      if(verify) {
+          refetch();
+          setVerify(false);
+      }
+  }, [verify, refetch]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f0f9f4] to-[#e6f5ec] flex flex-col">
-      {/* Header */}
-      <div className="p-6">
-        <div className="flex items-center">
-          <Link href="/" className="no-underline">
-            <span className="text-xl font-semibold bg-gradient-to-br from-[#0e6537] to-[#157a42] bg-clip-text text-transparent">
-              ACS
-            </span>
-          </Link>
-        </div>
-      </div>
+      <div className="min-h-screen bg-gradient-to-br from-accent/50 to-accent flex flex-col w-full h-full">
+        
 
-      {/* Main Content */}
-      <div className="flex-1 flex items-center justify-center px-4 pb-16">
-        <div className="w-full max-w-md">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="bg-white rounded-2xl shadow-xl border border-[#0e6537]/5 p-8 transition-all duration-300 hover:shadow-2xl"
-          >
-            {/* Page Header */}
-            <div className="text-center mb-8">
-              <div className="mb-4">
-                <div className="w-16 h-16 bg-gradient-to-br from-[#0e6537] to-[#157a42] rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg
-                    className="w-8 h-8 text-white"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
+        {/* Main Content */}
+        <div className="flex-1 flex items-center justify-center px-4 pb-16 w-full h-full">
+          <div className="w-full max-w-md">
+            <motion.div 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5 }}
+              className="bg-card rounded-2xl shadow-xl border border-border p-8 transition-all duration-300 hover:shadow-2xl"
+            >
+              {/* Page Header */}
+              <div className="text-center mb-8">
+                <div className="mb-4">
+                  <div className="w-16 h-16 bg-gradient-to-br from-secondary-dark to-secondary rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Lock className="w-8 h-8 text-text-on-gradient" />
+                  </div>
                 </div>
+                <h1 className="text-2xl font-semibold text-foreground mb-2 font-sans">
+                  Demo Access Required
+                </h1>
+                <p className="text-muted-foreground text-sm leading-relaxed font-sans">
+                  ACS is currently in a closed demo phase. Enter your demo code to access the platform.
+                </p>
               </div>
-              <h1 className="text-2xl font-semibold text-[#002417] mb-2">
-                Demo Access Required
-              </h1>
-              <p className="text-[#0e6537]/70 text-sm leading-relaxed">
-                ACS is currently in a closed demo phase. Enter your demo code to access the platform.
-              </p>
-            </div>
 
-            {/* Info Box */}
-            <div className="mb-6 p-4 bg-[#E8F5EE] border border-[#0e6537]/20 rounded-xl">
-              <div className="flex items-start space-x-3">
-                <svg
-                  className="w-5 h-5 text-[#0e6537] mt-0.5 flex-shrink-0"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  xmlns="http://www.w3.org/2000/svg"
+              {/* Info Box */}
+              <div className="mb-6">
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertTitle>For more information</AlertTitle>
+                  <AlertDescription>
+                     Visit{' '}
+                      <a
+                        href="https://www.demoacs.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-status-info underline hover:text-status-info/80 transition-colors"
+                      >
+                        https://www.demoacs.com
+                      </a>
+                  </AlertDescription>
+                </Alert>
+              </div>
+
+              {/* Success Message */}
+              {data?.success && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mb-6"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <div className="text-sm text-[#0e6537]">
-                  <p className="font-medium mb-1">For more information</p>
-                  <p>
-                    Visit{' '}
-                    <a
-                      href="https://www.demoacs.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="!text-blue-500 !underline !hover:text-[#0e6537]/80 transition-colors"
-                    >
-                      https://www.demoacs.com
-                    </a>
-                  </p>
-                </div>
-              </div>
-            </div>
+                  <Alert variant="default">
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertTitle>Success</AlertTitle>
+                    <AlertDescription>Demo code verified successfully!</AlertDescription>
+                  </Alert>
+                </motion.div>
+              )}
 
-            {/* Success Message */}
-            {success && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="mb-6 p-4 bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl"
-              >
-                <div className="flex items-center space-x-2">
-                  <svg
-                    className="w-5 h-5 text-green-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <span className="font-medium">Demo code verified! Redirecting...</span>
-                </div>
-              </motion.div>
-            )}
+              {/* Error Message */}
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mb-6"
+                >
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                </motion.div>
+              )}
 
-            {/* Error Message */}
-            {error && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl"
-              >
-                <div className="flex items-center space-x-2">
-                  <svg
-                    className="w-5 h-5 text-red-600"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span>{error}</span>
-                </div>
-              </motion.div>
-            )}
+              {/* Navigation Options - Show after successful verification */}
+              {verificationCompleted && data?.success && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="mb-6"
+                >
+                  <div className="text-center mb-4">
+                    <h3 className="text-lg font-medium text-foreground mb-2 font-sans">
+                      Choose Your Next Step
+                    </h3>
+                    <p className="text-muted-foreground text-sm font-sans">
+                      Create a new account or sign in to your existing account
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    {/* Sign Up Button */}
+                    <Button onClick={() => handleNavigation('/signup')} className="w-full text-text-on-gradient">
+                        <UserPlus className="w-5 h-5 mr-2" />
+                        Create New Account
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
 
-            {/* Demo Code Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="demoCode" className="block text-sm font-medium text-[#002417] mb-2">
-                  Demo Code
-                </label>
-                <div className="relative">
-                  <input
-                    id="demoCode"
-                    name="demoCode"
-                    type={showPassword ? "text" : "password"}
-                    required
-                    value={demoCode}
-                    onChange={handleChange}
-                    placeholder="Enter your demo code"
-                    className="w-full px-4 py-3 pr-12 border border-[#0e6537]/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#0e6537]/20 focus:border-[#0e6537] transition-all duration-200 placeholder-[#0e6537]/50 text-[#002417] bg-white hover:border-[#0e6537]/30"
-                    disabled={loading || success}
-                  />
-                  <button
-                    type="button"
-                    onClick={togglePasswordVisibility}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center"
-                    disabled={loading || success}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5 text-[#0e6537]/50 hover:text-[#0e6537] transition-colors" />
-                    ) : (
-                      <Eye className="h-5 w-5 text-[#0e6537]/50 hover:text-[#0e6537] transition-colors" />
-                    )}
-                  </button>
-                </div>
-              </div>
+                    {/* Login Button */}
+                    <Button onClick={() => handleNavigation('/login')} variant="outline" className="w-full">
+                        <LogIn className="w-5 h-5 mr-2" />
+                        Sign In to Existing Account
+                        <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </motion.div>
+              )}
 
-              <button
-                type="submit"
-                disabled={loading || success || !demoCode.trim()}
-                className="w-full relative group"
-              >
-                <span className="relative z-10 inline-flex items-center justify-center gap-2 px-4 py-3 font-medium text-white rounded-xl overflow-hidden whitespace-nowrap">
-                  {loading ? (
-                    <>
-                      <svg
-                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
+              {/* Demo Code Form - Hide after successful verification */}
+              {!verificationCompleted && (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div>
+                    <label htmlFor="demoCode" className="block text-sm font-medium text-foreground mb-2 font-sans">
+                      Demo Code
+                    </label>
+                    <div className="relative">
+                      <Input
+                        id="demoCode"
+                        name="demoCode"
+                        type={showPassword ? "text" : "password"}
+                        required
+                        value={demoCode}
+                        onChange={handleChange}
+                        placeholder="Enter your demo code"
+                        disabled={loading}
+                      />
+                      <button
+                        type="button"
+                        onClick={togglePasswordVisibility}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                        disabled={loading}
                       >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Verifying...
-                    </>
-                  ) : success ? (
-                    <>
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M5 13l4 4L19 7"
-                        />
-                      </svg>
-                      Verified!
-                    </>
-                  ) : (
-                    'Verify Demo Code'
-                  )}
-                </span>
-                <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#0e6537] to-[#157a42] transition-all duration-300 ease-out group-hover:scale-[1.02] group-hover:shadow-[0_0_20px_rgba(14,101,55,0.4)] disabled:opacity-50 disabled:cursor-not-allowed"></span>
-              </button>
-            </form>
+                        {showPassword ? (
+                          <EyeOff className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                        ) : (
+                          <Eye className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-            
-          </motion.div>
+                  <Button
+                    type="submit"
+                    disabled={loading || !demoCode.trim()}
+                    className="w-full text-text-on-gradient"
+                  >
+                    {loading ? (
+                        <>
+                          <LoadingSpinner size="sm" className="mr-2" />
+                          Verifying...
+                        </>
+                      ) : (
+                        'Verify Demo Code'
+                      )}
+                  </Button>
+                </form>
+              )}
+            </motion.div>
+          </div>
         </div>
       </div>
-    </div>
   )
 }
 

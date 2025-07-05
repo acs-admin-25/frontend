@@ -1,0 +1,415 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# ACS Next.js AI Editing Rules Configuration
+
+## 🎯 Core AI Editing Principles
+
+### 1. **Theme System Compliance**
+**ALWAYS use the centralized theme system for all styling decisions:**
+
+- **Color Usage**: Use theme CSS variables (`--primary`, `--secondary`, `--muted-foreground`, etc.) instead of hardcoded colors
+- **Font Usage**: Use theme font variables (`--font-inter`, `--font-playfair`) for consistent typography
+- **Spacing**: Follow theme radius and spacing patterns (`--radius`, consistent padding/margin)
+- **Dark Mode**: Ensure all components work with both light and dark themes
+- **Gradient Text**: Use `text-text-gradient` for text on gradient backgrounds
+
+**Example:**
+```typescript
+// ✅ Correct - Using theme variables
+<div className="bg-card text-card-foreground border-border rounded-lg">
+  <h2 className="text-foreground font-sans">Title</h2>
+  <p className="text-muted-foreground">Description</p>
+</div>
+
+// ❌ Incorrect - Hardcoded values
+<div className="bg-white text-black border-gray-200 rounded-md">
+  <h2 className="text-black font-inter">Title</h2>
+  <p className="text-gray-600">Description</p>
+</div>
+```
+
+### 2. **Centralized Data Flow Architecture**
+**Process data at the source, not in individual components:**
+
+- **API Responses**: All raw API data must be processed through `lib/utils/api.ts`
+- **Data Transformation**: Use centralized functions like `processThreadsResponse()`
+- **Type Safety**: Define canonical data structures in `types/` directory
+- **State Management**: Use centralized hooks in `hooks/` directory
+- **Error Handling**: Centralize error processing in `lib/api/errorHandling.ts`
+
+**Data Flow Pattern:**
+```
+Raw API → Centralized Processing → Canonical Data Structure → Components
+```
+
+**Example:**
+```typescript
+// ✅ Correct - Centralized processing
+// lib/utils/api.ts
+export function processThreadsResponse(rawData: any[]): Conversation[] {
+  return rawData.map(item => ({
+    thread: processThread(item.thread),
+    messages: processMessages(item.messages)
+  }));
+}
+
+// hooks/useDashboardData.ts
+const { data } = useApi('/api/threads');
+const conversations = processThreadsResponse(data);
+
+// Component
+<ConversationList conversations={conversations} />
+
+// ❌ Incorrect - Processing in component
+function ConversationList({ rawData }) {
+  const conversations = rawData.map(item => ({
+    // Manual processing logic
+  }));
+}
+```
+
+### 3. **Project Structure Compliance**
+**Follow the established directory structure:**
+
+```
+acs-next-js-dev/
+├── app/                    # Next.js App Router (pages only)
+│   ├── (auth)/            # Route groups
+│   ├── (dashboard)/       # Dashboard pages
+│   ├── (marketing)/       # Marketing pages
+│   └── api/               # API routes
+├── components/            # Reusable components
+│   ├── ui/               # Base UI components (buttons, inputs, etc.)
+│   ├── common/           # Shared components (layouts, feedback)
+│   ├── features/         # Feature-specific components
+│   └── providers/        # Context providers
+├── lib/                  # Utility libraries
+│   ├── api/              # API client and utilities
+│   ├── utils/            # General utilities
+│   ├── theme/            # Theme system
+│   └── auth/             # Authentication utilities
+├── hooks/                # Custom React hooks
+├── types/                # TypeScript type definitions
+└── __tests__/            # Test files
+```
+
+**File Placement Rules:**
+- **Components**: Place in appropriate `components/` subdirectory
+- **Utilities**: Place in `lib/utils/` with domain-specific files
+- **Types**: Place in `types/` with domain-specific files
+- **Hooks**: Place in `hooks/` directory
+- **API Logic**: Place in `lib/api/` directory
+
+### 4. **Security and Best Practices**
+
+#### **Input Validation**
+```typescript
+// ✅ Always validate user inputs
+import { validateField } from '@/lib/utils/validation';
+
+const emailError = validateField(email, {
+  required: true,
+  pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+});
+```
+
+#### **Authentication Checks**
+```typescript
+// ✅ Use AuthGuard for protected routes
+import { AuthGuard } from '@/components/features/auth/AuthGuard';
+
+<AuthGuard>
+  <ProtectedComponent />
+</AuthGuard>
+```
+
+#### **Error Handling**
+```typescript
+// ✅ Comprehensive error handling
+import { handleApiError } from '@/lib/api/errorHandling';
+
+try {
+  const response = await apiClient.request(endpoint);
+  if (!response.success) {
+    throw handleApiError(response);
+  }
+} catch (error) {
+  const appError = handleApiError(error);
+  // Handle error appropriately
+}
+```
+
+### 5. **Performance Optimization**
+
+#### **Code Splitting**
+```typescript
+// ✅ Use dynamic imports for large components
+import dynamic from 'next/dynamic';
+
+const DashboardCharts = dynamic(() => import('./DashboardCharts'), {
+  loading: () => <LoadingSpinner />,
+  ssr: false
+});
+```
+
+#### **Memoization**
+```typescript
+// ✅ Use React.memo for expensive components
+export const DashboardCard = React.memo(function DashboardCard({ 
+  title, 
+  value, 
+  trend 
+}: DashboardCardProps) {
+  // Component logic
+});
+
+// ✅ Use useMemo for expensive calculations
+const processedData = useMemo(() => {
+  return data.map(item => ({
+    ...item,
+    processed: expensiveCalculation(item)
+  }));
+}, [data]);
+```
+
+### 6. **TypeScript Standards**
+
+#### **Strict Type Safety**
+```typescript
+// ✅ Always define explicit interfaces
+interface ComponentProps {
+  // Required props first
+  title: string;
+  data: DataType[];
+  
+  // Optional props with defaults
+  variant?: 'default' | 'outline' | 'ghost';
+  size?: 'sm' | 'md' | 'lg';
+  
+  // Event handlers
+  onAction?: (data: DataType) => void;
+  
+  // Styling overrides
+  className?: string;
+  
+  // Children
+  children?: React.ReactNode;
+}
+
+// ❌ Avoid any types
+const data: any = response.data; // Don't do this
+```
+
+#### **Import/Export Patterns**
+```typescript
+// ✅ Use named exports for components
+export { DashboardCard } from './DashboardCard';
+export { DashboardMetrics } from './DashboardMetrics';
+
+// ✅ Use default exports only for pages
+export default function DashboardPage() { ... }
+
+// ✅ Use barrel exports for clean imports
+// components/features/dashboard/index.ts
+export * from './DashboardCard';
+export * from './DashboardMetrics';
+```
+
+### 7. **Component Architecture**
+
+#### **Single Responsibility**
+```typescript
+// ✅ Each component has one clear purpose
+export function DashboardCard({ title, value, trend }: DashboardCardProps) {
+  return (
+    <div className="bg-card rounded-lg p-6">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <p className="mt-2 text-3xl font-bold text-foreground">{value}</p>
+      {trend && <TrendIndicator trend={trend} />}
+    </div>
+  );
+}
+
+// ✅ Separate concerns into smaller components
+function TrendIndicator({ trend }: { trend: number }) {
+  return (
+    <p className={cn(
+      "mt-2 text-sm",
+      trend > 0 ? "text-status-success" : "text-status-error"
+    )}>
+      {trend > 0 ? "+" : ""}{trend}%
+    </p>
+  );
+}
+```
+
+#### **Composition Over Inheritance**
+```typescript
+// ✅ Use composition patterns
+function DashboardLayout({ children, header, sidebar }: DashboardLayoutProps) {
+  return (
+    <div className="flex h-screen">
+      {sidebar}
+      <div className="flex-1 flex flex-col">
+        {header}
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}
+```
+
+### 8. **Testing Standards**
+
+#### **Component Testing**
+```typescript
+// ✅ Test component behavior, not implementation
+describe('DashboardCard', () => {
+  it('renders with title and value', () => {
+    render(<DashboardCard title="Test" value="100" />);
+    expect(screen.getByText('Test')).toBeInTheDocument();
+    expect(screen.getByText('100')).toBeInTheDocument();
+  });
+  
+  it('shows trend indicator when provided', () => {
+    render(<DashboardCard title="Test" value="100" trend={5} />);
+    expect(screen.getByText('+5%')).toBeInTheDocument();
+  });
+});
+```
+
+#### **Utility Function Testing**
+```typescript
+// ✅ Test utility functions thoroughly
+describe('processThreadsResponse', () => {
+  it('processes raw data into Conversation objects', () => {
+    const rawData = [/* test data */];
+    const result = processThreadsResponse(rawData);
+    
+    expect(result).toBeInstanceOf(Array);
+    expect(result[0]).toHaveProperty('thread');
+    expect(result[0]).toHaveProperty('messages');
+  });
+});
+```
+
+### 9. **Documentation Standards**
+
+#### **JSDoc Comments**
+```typescript
+/**
+ * DashboardCard Component
+ * 
+ * Displays a single metric card with title, value, and optional trend.
+ * Uses theme colors and follows ACS design system.
+ * 
+ * @param title - The card title
+ * @param value - The metric value to display
+ * @param trend - Optional percentage trend
+ * @param className - Additional CSS classes
+ */
+export function DashboardCard({ 
+  title, 
+  value, 
+  trend, 
+  className 
+}: DashboardCardProps) {
+  // Component implementation
+}
+```
+
+### 10. **Pre-Implementation Checklist**
+
+Before implementing any feature, AI agents must:
+
+1. **Check Existing Functionality**
+   - Search for similar functionality in the codebase
+   - Reuse and improve existing code rather than creating duplicates
+   - Check centralized utilities in `lib/utils/`
+
+2. **Plan Data Flow**
+   - Identify where data originates
+   - Plan centralized processing location
+   - Define canonical data structures
+
+3. **Consider Theme Integration**
+   - Use theme CSS variables for all styling
+   - Ensure dark mode compatibility
+   - Follow established design patterns
+
+4. **Plan Error Handling**
+   - Identify potential failure points
+   - Plan graceful degradation
+   - Use centralized error handling
+
+5. **Consider Performance**
+   - Plan for code splitting if needed
+   - Consider memoization for expensive operations
+   - Optimize for bundle size
+
+### 11. **Common Pitfalls to Avoid**
+
+#### **❌ Don't Do This**
+```typescript
+// Hardcoded colors
+<div className="bg-white text-black">
+
+// Processing data in components
+const processedData = rawData.map(item => ({ /* processing */ }));
+
+// Using any types
+const data: any = response.data;
+
+// Ignoring errors
+try {
+  await apiCall();
+} catch (error) {
+  // Empty catch block
+}
+
+// Non-semantic HTML
+<div onClick={handleClick}>Click me</div>
+```
+
+#### **✅ Do This Instead**
+```typescript
+// Theme-based colors
+<div className="bg-card text-card-foreground">
+
+// Centralized processing
+const processedData = processData(rawData);
+
+// Proper types
+const data: ApiResponse<DataType> = response.data;
+
+// Handle errors properly
+try {
+  await apiCall();
+} catch (error) {
+  setError(error.message);
+}
+
+// Semantic HTML
+<button onClick={handleClick} className="btn">Click me</button>
+```
+
+---
+
+## 🚀 Implementation Priority
+
+1. **Theme Compliance** - Always use theme system
+2. **Centralization** - Process data at source
+3. **Type Safety** - Strict TypeScript usage
+4. **Error Handling** - Comprehensive error management
+5. **Performance** - Optimize for speed and efficiency
+6. **Testing** - Thorough test coverage
+7. **Documentation** - Clear and comprehensive docs
+
+This configuration ensures all AI agents follow consistent, scalable, and secure development practices while maintaining the integrity of the ACS Next.js application architecture.
+
+

@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { SessionProvider } from '@/app/providers/SessionProvider';
-import ErrorBoundary from '@/app/components/ErrorBoundary';
+import { AppProvider } from '@/components/providers/AppProvider';
+import { ErrorBoundary } from '@/components/common/Feedback/ErrorBoundary';
 import React from 'react';
 
 export const viewport: Viewport = {
@@ -29,16 +29,16 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="en">
+        <html lang="en" suppressHydrationWarning className="h-full">
             <head />
-            <body>
-                <ErrorBoundary>
-                    <React.StrictMode>
-                        <SessionProvider>
+            <body className="h-full" suppressHydrationWarning>
+                <React.StrictMode>
+                    <AppProvider>
+                        <ErrorBoundary>
                             {children}
-                        </SessionProvider>
-                    </React.StrictMode>
-                </ErrorBoundary>
+                        </ErrorBoundary>
+                    </AppProvider>
+                </React.StrictMode>
             </body>
         </html>
     );

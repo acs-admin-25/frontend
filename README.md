@@ -51,7 +51,7 @@ A modern Next.js frontend application for ACS (Automated Consultancy Services), 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/anaypant/acs-frontend.git
+   git clone https://github.com/acagliol/acs-frontend.git
    cd acs-frontend
    ```
 

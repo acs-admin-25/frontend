@@ -7,7 +7,9 @@ import { AnalyticsSnippet } from './AnalyticsSnippet';
 import { useDashboardSettings } from './DashboardSettings';
 import { WelcomeHeader } from '@/app/dashboard/components/cards/WelcomeHeader';
 import { UsageOverview } from './UsageOverview';
-import type { DashboardData } from '@/types/dashboard';
+import { DashboardTabs } from '../tabs/DashboardTabs';
+import type { DashboardData } from '@/lib/types/dashboard';
+import type { Conversation, Message } from '@/lib/types/conversation';
 
 interface DashboardContentProps {
   data: DashboardData;
@@ -40,7 +42,7 @@ export function DashboardContent({
       return data; // Return all data if range is incomplete
     }
 
-    const filteredConversations = data.conversations.filter(conv => {
+    const filteredConversations = data.conversations.filter((conv: Conversation) => {
       // Use lastMessageAt for filtering recent conversations, fallback to createdAt
       const convDate = new Date(conv.thread.lastMessageAt || conv.thread.createdAt);
       return convDate >= dateRange.from! && convDate <= dateRange.to!;
@@ -48,19 +50,19 @@ export function DashboardContent({
 
     // Recalculate metrics based on filtered data
     const totalLeads = filteredConversations.length;
-    const activeConversations = filteredConversations.filter(c => !c.thread.completed).length;
-    const completedConversations = filteredConversations.filter(c => c.thread.completed).length;
+    const activeConversations = filteredConversations.filter((c: Conversation) => !c.thread.completed).length;
+    const completedConversations = filteredConversations.filter((c: Conversation) => c.thread.completed).length;
     const conversionRate = totalLeads > 0 ? (completedConversations / totalLeads) * 100 : 0;
 
     // Calculate average response time from filtered conversations
     const responseTimes = filteredConversations
-      .flatMap(c => c.messages)
-      .filter(m => m.type === 'outbound-email')
-      .map(m => new Date(m.timestamp).getTime() - new Date(m.localDate).getTime())
-      .filter(time => time > 0);
+      .flatMap((c: Conversation) => c.messages)
+      .filter((m: Message) => m.type === 'outbound-email')
+      .map((m: Message) => new Date(m.timestamp).getTime() - new Date(m.localDate).getTime())
+      .filter((time: number) => time > 0);
     
     const averageResponseTime = responseTimes.length > 0 
-      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length / 1000 / 60 // in minutes
+      ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length / 1000 / 60 // in minutes
       : 0;
 
     return {
@@ -78,7 +80,7 @@ export function DashboardContent({
   // Calculate real-time metrics for welcome widget
   const calculateWelcomeMetrics = () => {
     const activeLeads = filteredData.metrics.activeConversations;
-    const newMessages = filteredData.conversations.filter(c => {
+    const newMessages = filteredData.conversations.filter((c: Conversation) => {
       const lastMessage = c.messages[c.messages.length - 1];
       if (!lastMessage) return false;
       const messageDate = new Date(lastMessage.timestamp);
@@ -109,6 +111,11 @@ export function DashboardContent({
           newMessages={welcomeMetrics.newMessages}
           conversionRate={welcomeMetrics.conversionRate}
         />
+      </div>
+
+      {/* Dashboard Tabs directly under WelcomeHeader */}
+      <div className="mb-8">
+        <DashboardTabs />
       </div>
 
       <main className="flex-1">

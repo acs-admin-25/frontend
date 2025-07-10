@@ -14,7 +14,7 @@ interface HeaderSectionProps {
  */
 export function HeaderSection({ isVisible }: HeaderSectionProps) {
   return (
-    <section className="bg-gradient-to-b from-primary via-secondary to-secondary-light py-12 sm:py-16 md:py-20 lg:py-24 xl:py-32 relative overflow-hidden">
+    <section className="bg-gradient-to-br from-[var(--midnight-800)] via-[var(--midnight-700)] to-[var(--midnight-600)] py-12 sm:py-16 md:py-20 lg:py-24 xl:py-32 relative overflow-hidden">
       <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]"></div>
       <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent"></div>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4 sm:space-y-6 md:space-y-8">
@@ -35,4 +35,4 @@ export function HeaderSection({ isVisible }: HeaderSectionProps) {
       </div>
     </section>
   );
-} 
+}

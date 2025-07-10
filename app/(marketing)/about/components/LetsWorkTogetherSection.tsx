@@ -9,7 +9,7 @@ interface LetsWorkTogetherSectionProps {
 
 export function LetsWorkTogetherSection({ isVisible }: LetsWorkTogetherSectionProps) {
   return (
-    <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-secondary to-secondary-light relative overflow-hidden">
+    <section className="py-12 sm:py-16 md:py-20 bg-gradient-to-br from-[var(--midnight-800)] via-[var(--midnight-700)] to-[var(--midnight-600)] relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-r from-black/10 to-transparent"></div>
       <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2
@@ -56,4 +56,4 @@ export function LetsWorkTogetherSection({ isVisible }: LetsWorkTogetherSectionPr
       </div>
     </section>
   );
-} 
+}

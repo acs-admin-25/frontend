@@ -38,7 +38,7 @@ export function CTASection({
 }: CTASectionProps) {
   return (
     <section className={cn(
-      "py-12 sm:py-16 md:py-20 bg-[var(--primary-dark)] relative overflow-hidden",
+      "py-12 sm:py-16 md:py-20 bg-gradient-to-br from-[var(--midnight-800)] via-[var(--midnight-700)] to-[var(--midnight-600)] relative overflow-hidden",
       className
     )}>
       <div className="absolute inset-0">
@@ -83,4 +83,4 @@ export function CTASection({
       </div>
     </section>
   );
-} 
+}

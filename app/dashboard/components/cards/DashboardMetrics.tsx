@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Users, MessageSquare, Target, Clock, Activity, Zap, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
 import type { DashboardMetrics as Metrics } from '@/lib/types/dashboard';
@@ -20,7 +20,8 @@ const MetricCard = ({
   changeType, 
   subtitle,
   trend,
-  showTrend = true
+  showTrend = true,
+  className = ""
 }: { 
   name: string; 
   value: string | number; 
@@ -32,13 +33,14 @@ const MetricCard = ({
   subtitle?: string;
   trend?: 'up' | 'down' | 'stable' | null;
   showTrend?: boolean;
+  className?: string;
 }) => {
     const ChangeIcon = changeType === 'increase' ? TrendingUp : TrendingDown;
     const changeColor = changeType === 'increase' ? 'text-status-success' : 'text-status-error';
     const trendColor = trend === 'up' ? 'text-status-success' : trend === 'down' ? 'text-status-error' : 'text-muted-foreground';
 
     return (
-        <div className="card bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-lg transition-all duration-300 group w-[240px] flex-shrink-0 h-[160px]">
+        <div className={`card bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-lg transition-all duration-300 group w-full h-full flex-shrink-0 ${className}`}>
             <div className="flex items-center justify-between mb-4">
                 <div className="flex-1">
                     <p className="text-sm font-medium text-muted-foreground mb-1">{name}</p>
@@ -75,8 +77,24 @@ const MetricCard = ({
 
 export function DashboardMetrics({ data, dateRange, conversations = [] }: DashboardMetricsProps) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const cardWidth = 240; // Fixed width for each card
-  
+  const sliderContainerRef = useRef<HTMLDivElement>(null);
+  const [slideWidth, setSlideWidth] = useState(0);
+
+  // --- METRIC SLIDER CONSTANTS ---
+  const metricsPerSlide = 3;
+  const METRIC_CARD_WIDTH = 220; // px, fixed width for each card
+  const SLIDER_WIDTH = METRIC_CARD_WIDTH * metricsPerSlide; // always 3 cards
+
+  // --- RESPONSIVE CONTAINER STYLES ---
+  const keyCardBase =
+    "flex flex-col justify-center items-center bg-[#288e41] rounded-xl shadow-sm border border-[#047857] mr-4";
+  const keyCardResponsive =
+    "w-[180px] sm:w-[220px] md:w-[240px] min-w-[140px] max-w-[240px] h-[120px] sm:h-[140px] md:h-[160px] flex-shrink-0";
+
+  // --- ARROW BUTTON STYLES ---
+  const arrowButtonBase =
+    "flex items-center justify-center absolute top-1/2 -translate-y-1/2 z-10 bg-card border border-border rounded-full p-2 shadow-md hover:shadow-lg transition-all duration-200 hover:bg-muted";
+
   // Calculate trends if we have date range and conversations
   const trends = dateRange && dateRange.from && dateRange.to && conversations.length > 0 
     ? calculateTrends(conversations, dateRange.from, dateRange.to)
@@ -190,88 +208,135 @@ export function DashboardMetrics({ data, dateRange, conversations = [] }: Dashbo
     },
   ];
 
-  const handleScrollLeft = () => {
-    if (trackRef.current) {
-      trackRef.current.scrollBy({ left: -cardWidth, behavior: 'smooth' });
+  const totalSlides = Math.ceil(metrics.length / metricsPerSlide);
+
+  // --- SLIDER STATE ---
+  const [currentPage, setCurrentPage] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Responsive constants
+  const SLIDER_WINDOW_MAX_WIDTH = 960; // px
+  const SLIDER_WINDOW_MIN_WIDTH = 480; // px
+  const CARD_MIN_WIDTH = 140; // px
+  const CARD_MAX_WIDTH = 320; // px
+  const cardsPerPage = 3;
+  const CARD_GAP = 24; // px (for JS width calc, but use gap-4/gap-6 for CSS)
+
+  const sliderWindowRef = React.useRef<HTMLDivElement>(null);
+  const [sliderWindowWidth, setSliderWindowWidth] = useState(0);
+
+  // Responsive: measure the slider window width
+  useEffect(() => {
+    function updateWidth() {
+      if (sliderWindowRef.current) {
+        setSliderWindowWidth(sliderWindowRef.current.offsetWidth);
+      }
     }
+    updateWidth();
+    window.addEventListener('resize', updateWidth);
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
+
+  // Calculate card width responsively
+  const cardWidth = sliderWindowWidth > 0
+    ? Math.max(
+        CARD_MIN_WIDTH,
+        Math.min((sliderWindowWidth - CARD_GAP * 2) / cardsPerPage, CARD_MAX_WIDTH)
+      )
+    : CARD_MIN_WIDTH;
+  // Calculate number of pages
+  const totalPages = Math.ceil(metrics.length / cardsPerPage);
+
+  // Animation handlers
+  const handlePrev = () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    setCurrentPage((prev) => (prev === 0 ? totalPages - 1 : prev - 1));
+    setTimeout(() => setIsAnimating(false), 400);
+  };
+  const handleNext = () => {
+    if (isAnimating) return;
+    setIsAnimating(true);
+    setCurrentPage((prev) => (prev === totalPages - 1 ? 0 : prev + 1));
+    setTimeout(() => setIsAnimating(false), 400);
   };
 
-  const handleScrollRight = () => {
-    if (trackRef.current) {
-      trackRef.current.scrollBy({ left: cardWidth, behavior: 'smooth' });
-    }
-  };
+  // Calculate the indices for the current page
+  const startIdx = currentPage * cardsPerPage;
+  const endIdx = startIdx + cardsPerPage;
+  const visibleMetrics = metrics.slice(startIdx, endIdx);
 
   return (
-    <div className="space-y-6">
-      {/* Horizontal Metrics Carousel */}
-      <div className="relative w-full">
-        {/* Metrics Slider */}
-        <div 
-          ref={trackRef}
-          className="metrics-slider w-full"
-          style={{
-            display: 'flex',
-            overflow: 'hidden',
-            scrollSnapType: 'x mandatory',
-            gap: '1rem',
-            paddingLeft: '1rem',
-            paddingRight: '1rem',
-            alignItems: 'stretch'
-          }}
-        >
-          {/* Key Metrics Header Card - EXACT Same Structure as Other Cards */}
-          <div 
-            className="card bg-[#288e41] p-6 rounded-xl border border-[#047857] shadow-sm hover:shadow-lg transition-all duration-300 group w-[240px] flex-shrink-0 h-[160px]"
-            style={{ scrollSnapAlign: 'start' }}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex-1">
-                <p className="text-sm font-medium text-white/80 mb-1">Key Metrics</p>
-                <p className="text-xs text-white/60">Performance Overview</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white/20 group-hover:scale-110 transition-transform duration-200">
+    <div className="w-full max-w-full mb-8 px-2 sm:px-4 md:px-6 overflow-x-hidden">
+      <div
+        className="flex flex-col md:flex-row items-stretch md:items-center bg-card rounded-2xl shadow-lg border border-border w-full max-w-full overflow-x-hidden p-2 sm:p-4 md:p-6 gap-4 md:gap-0"
+        style={{
+          background: 'var(--card)',
+          boxShadow: 'var(--shadow-lg)',
+        }}
+      >
+        {/* Key Metrics Card - fixed size, responsive, never overlapped */}
+        <div className={`${keyCardBase} ${keyCardResponsive} mb-4 md:mb-0 md:mr-8 flex-shrink-0`}>
+          <div className="flex flex-col items-center justify-center h-full w-full px-2">
+            <div className="flex items-center mb-2">
+              <div className="bg-white/20 rounded-lg p-2 mr-2 flex items-center justify-center">
                 <BarChart3 className="h-6 w-6 text-white" />
               </div>
+              <span className="text-lg font-semibold text-white">Key Metrics</span>
             </div>
-            <div className="space-y-2">
-              <p className="text-3xl font-bold text-white">Key Metrics</p>
+            <span className="text-xs text-white/70">Performance Overview</span>
+          </div>
+        </div>
+        {/* Slider Area: arrows outside the overflow-hidden slider window */}
+        <div className="flex flex-row items-center justify-center rounded-2xl bg-muted/70 border border-border shadow-lg backdrop-blur-md w-full max-w-[900px] min-w-[360px] mx-auto px-2 py-4 overflow-x-hidden">
+          {/* Left Arrow - outside slider window, hide on xs screens */}
+          <div className="hidden xs:flex items-center justify-center h-full mr-2">
+            <button
+              onClick={handlePrev}
+              className="group w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-card/80 backdrop-blur-md border border-border shadow-lg hover:shadow-xl hover:ring-2 hover:ring-primary/30 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label="Previous metrics slide"
+              style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)' }}
+              disabled={isAnimating}
+            >
+              <span className="inline-flex transition-transform duration-200 group-hover:-translate-x-1 group-hover:scale-110 active:scale-90">
+                <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 text-muted-foreground" />
+              </span>
+            </button>
+          </div>
+          {/* Slider window - robust sizing, always fills available space, centered */}
+          <div
+            className="relative flex items-center justify-center flex-1 min-w-0 w-full overflow-hidden"
+            style={{ height: '100%', margin: '0 auto' }}
+          >
+            <div
+              className="flex w-full flex-row flex-nowrap gap-4"
+              style={{ minWidth: 0, height: '100%' }}
+            >
+              {visibleMetrics.map((metric) => (
+                <div
+                  key={metric.name}
+                  className="flex-shrink-0 flex-1 h-full flex flex-col min-w-0 min-w-[120px] max-w-[280px]"
+                >
+                  <MetricCard {...metric} className="w-full h-full" />
+                </div>
+              ))}
             </div>
           </div>
-
-          {/* Metric Cards */}
-          {metrics.map((metric, index) => (
-            <div 
-              key={metric.name} 
-              style={{ scrollSnapAlign: 'start' }}
+          {/* Right Arrow - outside slider window, hide on xs screens */}
+          <div className="hidden xs:flex items-center justify-center h-full ml-2">
+            <button
+              onClick={handleNext}
+              className="group w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 flex items-center justify-center rounded-full bg-card/80 backdrop-blur-md border border-border shadow-lg hover:shadow-xl hover:ring-2 hover:ring-primary/30 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary"
+              aria-label="Next metrics slide"
+              style={{ boxShadow: '0 4px 24px 0 rgba(0,0,0,0.10)' }}
+              disabled={isAnimating}
             >
-              <MetricCard {...metric} />
-            </div>
-          ))}
+              <span className="inline-flex transition-transform duration-200 group-hover:translate-x-1 group-hover:scale-110 active:scale-90">
+                <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 text-muted-foreground" />
+              </span>
+            </button>
+          </div>
         </div>
-        
-        {/* Navigation Arrows - Positioned on white cards only */}
-        <button
-          onClick={handleScrollLeft}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-border rounded-full p-2 shadow-lg hover:shadow-xl transition-all duration-200 hover:bg-gray-50"
-          style={{ 
-            left: `${cardWidth + 16}px`, // Position after the green Key Metrics card (240px + 16px gap)
-            transform: 'translateY(-50%) translateX(-50%)' // Half on, half off positioning
-          }}
-        >
-          <ChevronLeft className="h-4 w-4 text-muted-foreground" />
-        </button>
-        
-        <button
-          onClick={handleScrollRight}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-border rounded-full p-2 shadow-lg hover:shadow-xl transition-all duration-200 hover:bg-gray-50"
-          style={{ 
-            right: '0.5rem',
-            transform: 'translateY(-50%) translateX(50%)' // Half on, half off positioning
-          }}
-        >
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </button>
       </div>
     </div>
   );

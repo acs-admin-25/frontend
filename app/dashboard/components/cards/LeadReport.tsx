@@ -265,37 +265,6 @@ const LeadReport: React.FC<LeadReportProps> = ({ userId, leadData, loading, time
 
   return (
     <div className="bg-white p-6 rounded-lg border border-[#0e6537]/20 shadow-sm" id="lead-report-content">
-      {/* Quick Actions */}
-      <div className="mb-6">
-        <h4 className="font-semibold mb-3 text-center">Quick Actions</h4>
-        <div className="flex justify-center items-center gap-4 flex-wrap w-full mb-2">
-          <button
-            className="px-5 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow text-base font-semibold focus:outline-none focus:ring-2 focus:ring-[#0e6537]/50"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                const event = new CustomEvent('leadreport:track-journey');
-                window.dispatchEvent(event);
-              }
-            }}
-          >
-            Track Lead Journey
-          </button>
-          <button
-            className="px-5 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow text-base font-semibold focus:outline-none focus:ring-2 focus:ring-[#0e6537]/50 border-2 border-[#0e6537]"
-            style={{ boxShadow: '0 0 0 2px #0e6537' }}
-            disabled
-            title="You are viewing the Report"
-          >
-            Generate Report
-          </button>
-          <button
-            className="px-4 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow-sm text-base font-semibold focus:outline-none focus:ring-2 focus:ring-[#0e6537]/50"
-            onClick={handleDownloadReport}
-          >
-            Download PDF Report
-          </button>
-        </div>
-      </div>
 
       {loading ? (
         <div className="flex items-center justify-center h-64 text-gray-600">Loading report data...</div>
@@ -347,6 +316,8 @@ const LeadReport: React.FC<LeadReportProps> = ({ userId, leadData, loading, time
               </LineChart>
             </ResponsiveContainer>
           </div>
+
+
         </div>
       ) : (
         <div className="flex items-center justify-center h-64 text-gray-600">No data available.</div>

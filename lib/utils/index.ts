@@ -68,10 +68,11 @@ export {
 
 // Analytics utilities
 export {
-  calculateKeyMetrics,
-  formatMetrics,
-  calculateAverageEVByMessage,
-  filterConversations as filterAnalyticsConversations
+  calculateRealMetrics,
+  generateChartData,
+  calculateTrends,
+  formatTrendChange,
+  getTrendDirection
 } from './analytics';
 
 // Conversations utilities (avoid conflicts)

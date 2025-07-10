@@ -78,51 +78,6 @@ const ConversationProgression: React.FC<ConversationProgressionProps> = ({ leadD
 
   return (
     <div className="bg-white p-6 rounded-lg border border-[#0e6537]/20 shadow-sm">
-      {/* Quick Actions */}
-      <div className="mb-6">
-        <h4 className="font-semibold mb-3 text-center">Quick Actions</h4>
-        <div className="flex justify-center items-center gap-4 flex-wrap w-full mb-2">
-          <button
-            className="px-5 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow text-base font-semibold focus:outline-none focus:ring-2 focus:ring-[#0e6537]/50"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                const event = new CustomEvent('leadreport:track-journey');
-                window.dispatchEvent(event);
-              }
-            }}
-          >
-            Track Lead Journey
-          </button>
-          <button
-            className="px-5 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow text-base font-semibold focus:outline-none focus:ring-2 focus:ring-[#0e6537]/50 border-2 border-[#0e6537]"
-            style={{ boxShadow: '0 0 0 2px #0e6537' }}
-            disabled
-            title="You are viewing the Report Progression"
-          >
-            Generate Report
-          </button>
-          <button
-            className="px-4 py-2 bg-gradient-to-r from-[#0e6537] to-[#157a42] text-white rounded-lg hover:from-[#157a42] hover:to-[#1a8a4a] transition-all duration-200 shadow-sm text-base font-semibold focus:outline-none focus:ring-2 focus:ring-[#0e6537]/50"
-            onClick={async () => {
-              if (typeof window === 'undefined') return;
-              const html2pdf = (await import('html2pdf.js')).default;
-              const element = document.getElementById('conversation-progression-content');
-              if (element) {
-                html2pdf(element, {
-                  margin: 10,
-                  filename: 'conversation-progression.pdf',
-                  image: { type: 'jpeg', quality: 0.98 },
-                  html2canvas: { scale: 2 },
-                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-                });
-              }
-            }}
-            title="Download the Conversation Progression as PDF"
-          >
-            Download PDF Report
-          </button>
-        </div>
-      </div>
       <div id="conversation-progression-content">
         <h3 className="text-lg font-semibold mb-4">Conversation EV Score Progression</h3>
         {loading ? (

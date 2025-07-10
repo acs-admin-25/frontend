@@ -1,89 +1,72 @@
-import React from 'react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { cn } from '@/lib/utils/utils';
+import React, { useState } from 'react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils/utils'
+import { ConversationsTab } from './ConversationsTab'
+import { AnalyticsTab } from './AnalyticsTab'
+import { UsageTab } from './UsageTab'
+import { ResourcesTab } from './ResourcesTab'
+import { FilterButton } from '../FilterButton'
 
-// Placeholder components for each tab (to be implemented separately)
-function ConversationsTab() {
-  return <div className="p-6">Conversations content goes here.</div>;
-}
-function AnalyticsTab() {
-  return <div className="p-6">Analytics content goes here.</div>;
-}
-function UsageTab() {
-  return <div className="p-6">Usage content goes here.</div>;
-}
-function ResourcesTab() {
-  return <div className="p-6">Resources content goes here.</div>;
-}
+// Import the actual tab components
+import type { Conversation } from '@/lib/types/conversation';
 
-export function DashboardTabs({ className }: { className?: string }) {
+// Date range options
+export type DateRange = '24h' | '7d' | '30d' | '3m' | '6m' | '1y';
+
+export function DashboardTabs({ className, conversations }: { className?: string; conversations?: Conversation[] }) {
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('30d');
+
+  // Add CSS for hiding scrollbar
+  const scrollbarHideStyle = `
+    .filter-dropdown::-webkit-scrollbar {
+      display: none;
+    }
+  `;
+
+  const baseTabTriggerClasses = cn(
+    "flex-1 text-lg px-6 py-3 h-full rounded-t-lg font-semibold",
+    "transition-colors duration-200",
+    "data-[state=active]:bg-[#288e41] data-[state=active]:text-white",
+    "data-[state=inactive]:bg-card data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:bg-[#288e41]/40 data-[state=inactive]:hover:text-black",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2", // Added focus styles for accessibility
+  )
+
   return (
-    <div
-      className={cn(
-        'w-full max-w-screen-2xl mx-auto mt-4',
-        'pl-0 md:pl-8', // match left padding of dashboard grid
-        className
-      )}
-    >
-      <Tabs defaultValue="conversations" className="w-full max-w-3xl">
-        <TabsList
-          className={cn(
-            'mb-2 flex justify-start bg-card p-2 rounded-xl gap-2 shadow-lg',
-            'min-w-[320px] max-w-full',
-            'border border-border',
-            'h-16'
-          )}
-        >
-          <TabsTrigger
-            value="conversations"
-            className={cn(
-              'text-lg px-8 py-3 h-12',
-              'data-[state=active]:bg-[var(--primary)] data-[state=active]:text-[var(--primary-foreground)]',
-              'transition-colors duration-200',
-              'font-semibold'
-            )}
-          >
-            Conversations
-          </TabsTrigger>
-          <TabsTrigger
-            value="analytics"
-            className={cn(
-              'text-lg px-8 py-3 h-12',
-              'data-[state=active]:bg-[var(--primary)] data-[state=active]:text-[var(--primary-foreground)]',
-              'transition-colors duration-200',
-              'font-semibold'
-            )}
-          >
-            Analytics
-          </TabsTrigger>
-          <TabsTrigger
-            value="usage"
-            className={cn(
-              'text-lg px-8 py-3 h-12',
-              'data-[state=active]:bg-[var(--primary)] data-[state=active]:text-[var(--primary-foreground)]',
-              'transition-colors duration-200',
-              'font-semibold'
-            )}
-          >
-            Usage
-          </TabsTrigger>
-          <TabsTrigger
-            value="resources"
-            className={cn(
-              'text-lg px-8 py-3 h-12',
-              'data-[state=active]:bg-[var(--primary)] data-[state=active]:text-[var(--primary-foreground)]',
-              'transition-colors duration-200',
-              'font-semibold'
-            )}
-          >
-            Resources
-          </TabsTrigger>
-        </TabsList>
+    <div className={cn("w-full mt-4 px-4 sm:px-6", className)}>
+      <style>{scrollbarHideStyle}</style>
+      <Tabs defaultValue="conversations" className="w-full">
+        <div className="flex items-center justify-between border-b border-border">
+          {" "}
+          {/* Softer bottom border */}
+          <TabsList className="flex bg-transparent p-0 gap-0 h-12 flex-1">
+            {" "}
+            {/* Removed vertical borders */}
+            <TabsTrigger value="conversations" className={baseTabTriggerClasses}>
+              Conversations
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className={baseTabTriggerClasses}>
+              Analytics
+            </TabsTrigger>
+            <TabsTrigger value="usage" className={baseTabTriggerClasses}>
+              Usage
+            </TabsTrigger>
+            <TabsTrigger value="resources" className={baseTabTriggerClasses}>
+              Resources
+            </TabsTrigger>
+          </TabsList>
+          <div className="flex items-center gap-2">
+            {/* Comprehensive Filter Button */}
+            <FilterButton 
+              selectedDateRange={selectedDateRange} 
+              onDateRangeChange={setSelectedDateRange}
+            />
+          </div>
+        </div>
         <TabsContent value="conversations">
-          <ConversationsTab />
+          <ConversationsTab conversations={conversations} />
         </TabsContent>
         <TabsContent value="analytics">
-          <AnalyticsTab />
+          <AnalyticsTab selectedDateRange={selectedDateRange} />
         </TabsContent>
         <TabsContent value="usage">
           <UsageTab />
@@ -93,7 +76,7 @@ export function DashboardTabs({ className }: { className?: string }) {
         </TabsContent>
       </Tabs>
     </div>
-  );
+  )
 }
 
-export default DashboardTabs; 
+export default DashboardTabs

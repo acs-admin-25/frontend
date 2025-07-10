@@ -67,7 +67,18 @@ export function processThreadsResponse(responseData: any[]): Conversation[] {
         createdAt: rawThread.createdAt,
         created_at: rawThread.created_at,
         last_updated: rawThread.last_updated,
-        messagesCount: item.messages?.length || 0
+        messagesCount: item.messages?.length || 0,
+        // Field mapping debug
+        lead_name_raw: rawThread.lead_name,
+        source_name_raw: rawThread.source_name,
+        name_raw: rawThread.name,
+        client_name_raw: rawThread.client_name,
+        sender_name_raw: rawThread.sender_name,
+        client_email_raw: rawThread.client_email,
+        source_raw: rawThread.source,
+        email_raw: rawThread.email,
+        sender_email_raw: rawThread.sender_email,
+        lead_email_raw: rawThread.lead_email
       });
 
       // Process all messages with proper date handling
@@ -116,7 +127,11 @@ export function processThreadsResponse(responseData: any[]): Conversation[] {
         conversation_id: thread.conversation_id,
         createdAt: thread.createdAt,
         createdAtType: typeof thread.createdAt,
-        messagesCount: messages.length
+        messagesCount: messages.length,
+        // Final processed values
+        final_lead_name: thread.lead_name,
+        final_client_email: thread.client_email,
+        final_source_name: thread.source_name
       });
 
       const conversation = { thread, messages };
@@ -124,6 +139,18 @@ export function processThreadsResponse(responseData: any[]): Conversation[] {
       return conversation;
     })
     .filter((conv): conv is Conversation => conv !== null);
+
+  // Check for duplicates before sorting
+  const conversationIds = processedConversations.map(c => c.thread.conversation_id);
+  const duplicateIds = conversationIds.reduce((acc, id) => {
+    acc[id] = (acc[id] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const duplicates = Object.entries(duplicateIds).filter(([id, count]) => count > 1);
+  if (duplicates.length > 0) {
+    console.warn('[api.ts] Found duplicate conversation IDs:', duplicates);
+  }
 
   // Sort conversations by lastMessageAt in descending order (most recent first)
   // This ensures consistent ordering across all components that use this data

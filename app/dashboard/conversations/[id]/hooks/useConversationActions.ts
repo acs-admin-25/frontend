@@ -54,13 +54,57 @@ export function useConversationActions() {
   /**
    * Generate AI response
    */
-  const generateAIResponse = async (setGeneratingResponse: (generating: boolean) => void) => {
+  const generateAIResponse = async (setGeneratingResponse: (generating: boolean) => void, conversation?: any) => {
+    console.log('🚀 generateAIResponse called with conversation:', conversation?.thread?.conversation_id);
     setGeneratingResponse(true);
     try {
-      // Implementation for AI response generation
       console.log('Generating AI response...');
+      
+      if (!conversation) {
+        throw new Error('Conversation not provided');
+      }
+
+      // Prepare the request for AI response generation
+      const request = {
+        conversation_id: conversation.thread.conversation_id,
+        account_id: conversation.thread.account_id || conversation.thread.user_id,
+        is_first_email: false // This will be determined by the backend based on conversation history
+      };
+
+      console.log('Sending AI request:', request);
+
+      // Call the LCP API to generate AI response
+      const response = await fetch('/api/lcp/get_llm_response', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate AI response: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.data) {
+        console.log('AI response generated successfully:', data.data);
+        
+        // Check if response is flagged for review
+        if (data.flagged) {
+          console.log('Response flagged for review');
+          // You might want to handle flagged responses differently
+        }
+        
+        // The response will be handled by the parent component
+        return data.data.response || data.data.message || 'AI response generated';
+      } else {
+        throw new Error(data.error || 'Failed to generate AI response');
+      }
     } catch (error) {
       console.error('Failed to generate AI response:', error);
+      throw error;
     } finally {
       setGeneratingResponse(false);
     }

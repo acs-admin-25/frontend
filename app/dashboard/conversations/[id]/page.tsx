@@ -101,8 +101,20 @@ export default function ConversationDetailPage() {
     conversationActions.handleUseGeneratedResponse(generatedResponse, setMessageInput, setShowGenerateModal);
   };
 
-  const handleGenerateAIResponse = () => {
-    conversationActions.generateAIResponse(setGeneratingResponse);
+  const handleGenerateAIResponse = async () => {
+    console.log('🎯 handleGenerateAIResponse called with conversation:', conversation?.thread?.conversation_id);
+    try {
+      const response = await conversationActions.generateAIResponse(setGeneratingResponse, conversation);
+      if (response) {
+        setGeneratedResponse(response);
+        setShowGenerateModal(true);
+        console.log('AI response generated and modal opened');
+      }
+    } catch (error) {
+      console.error('Failed to generate AI response:', error);
+      // Show error to user - you might want to add a toast notification here
+      alert('Failed to generate AI response. Please try again.');
+    }
   };
 
   const handleSendEmail = () => {

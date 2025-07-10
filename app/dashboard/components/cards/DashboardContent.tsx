@@ -1,13 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import { DashboardMetrics } from './DashboardMetrics';
-import { RecentConversations } from './RecentConversations';
-import { QuickResources } from './QuickResources';
-import { AnalyticsSnippet } from './AnalyticsSnippet';
 import { useDashboardSettings } from './DashboardSettings';
-import { WelcomeHeader } from '@/app/dashboard/components/cards/WelcomeHeader';
-import { UsageOverview } from './UsageOverview';
-import type { DashboardData } from '@/types/dashboard';
+import { DashboardHeader } from '@/app/dashboard/components/cards/DashboardHeader';
+import { DashboardTabs } from '../tabs/DashboardTabs';
+import type { DashboardData } from '@/lib/types/dashboard';
+import type { Conversation, Message } from '@/lib/types/conversation';
 
 interface DashboardContentProps {
   data: DashboardData;
@@ -40,7 +38,7 @@ export function DashboardContent({
       return data; // Return all data if range is incomplete
     }
 
-    const filteredConversations = data.conversations.filter(conv => {
+    const filteredConversations = data.conversations.filter((conv: Conversation) => {
       // Use lastMessageAt for filtering recent conversations, fallback to createdAt
       const convDate = new Date(conv.thread.lastMessageAt || conv.thread.createdAt);
       return convDate >= dateRange.from! && convDate <= dateRange.to!;
@@ -48,19 +46,19 @@ export function DashboardContent({
 
     // Recalculate metrics based on filtered data
     const totalLeads = filteredConversations.length;
-    const activeConversations = filteredConversations.filter(c => !c.thread.completed).length;
-    const completedConversations = filteredConversations.filter(c => c.thread.completed).length;
+    const activeConversations = filteredConversations.filter((c: Conversation) => !c.thread.completed).length;
+    const completedConversations = filteredConversations.filter((c: Conversation) => c.thread.completed).length;
     const conversionRate = totalLeads > 0 ? (completedConversations / totalLeads) * 100 : 0;
 
     // Calculate average response time from filtered conversations
     const responseTimes = filteredConversations
-      .flatMap(c => c.messages)
-      .filter(m => m.type === 'outbound-email')
-      .map(m => new Date(m.timestamp).getTime() - new Date(m.localDate).getTime())
-      .filter(time => time > 0);
+      .flatMap((c: Conversation) => c.messages)
+      .filter((m: Message) => m.type === 'outbound-email')
+      .map((m: Message) => new Date(m.timestamp).getTime() - new Date(m.localDate).getTime())
+      .filter((time: number) => time > 0);
     
     const averageResponseTime = responseTimes.length > 0 
-      ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length / 1000 / 60 // in minutes
+      ? responseTimes.reduce((a: number, b: number) => a + b, 0) / responseTimes.length / 1000 / 60 // in minutes
       : 0;
 
     return {
@@ -78,7 +76,7 @@ export function DashboardContent({
   // Calculate real-time metrics for welcome widget
   const calculateWelcomeMetrics = () => {
     const activeLeads = filteredData.metrics.activeConversations;
-    const newMessages = filteredData.conversations.filter(c => {
+    const newMessages = filteredData.conversations.filter((c: Conversation) => {
       const lastMessage = c.messages[c.messages.length - 1];
       if (!lastMessage) return false;
       const messageDate = new Date(lastMessage.timestamp);
@@ -92,19 +90,11 @@ export function DashboardContent({
 
   const welcomeMetrics = calculateWelcomeMetrics();
 
-  // Calculate analytics snippet data
-  const analyticsData = {
-    totalLeads: filteredData.metrics.totalLeads,
-    conversionRate: filteredData.metrics.conversionRate,
-    activeConversations: filteredData.metrics.activeConversations,
-    avgResponseTime: Math.round(filteredData.metrics.averageResponseTime || 0)
-  };
-
   return (
     <div className="h-full bg-muted/50 overflow-y-auto">
       {/* Welcome Widget with Real Data */}
-      <div className="mb-8">
-        <WelcomeHeader 
+      <div className="mb-8 px-4 sm:px-6">
+        <DashboardHeader 
           activeLeads={welcomeMetrics.activeLeads}
           newMessages={welcomeMetrics.newMessages}
           conversionRate={welcomeMetrics.conversionRate}
@@ -114,60 +104,23 @@ export function DashboardContent({
       <main className="flex-1">
         {/* Enhanced Metrics Row */}
         {settings.showMetrics && (
-          <div className="mb-8 max-w-screen-2xl mx-auto px-4 sm:px-6 md:px-8">
+          <div className="mb-8 px-4 sm:px-6">
             <DashboardMetrics 
               data={filteredData.metrics} 
               conversations={data.conversations}
             />
           </div>
         )}
+
+        {/* Dashboard Tabs below key metrics */}
+        <div className="mb-8 px-4 sm:px-6">
+          <DashboardTabs conversations={data.conversations} />
+        </div>
         
         <div className="p-6 lg:p-8">
         
-        {/* 2-Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 auto-rows-min">
-          {/* Left Column */}
-          <div className="col-span-12 lg:col-span-7 flex flex-col gap-6">
-            {/* Recent Conversations */}
-            <RecentConversations conversations={filteredData.conversations} />
-
-            {/* Usage Overview */}
-            {settings.showUsage && (
-              <UsageOverview usage={data.usage} />
-            )}
-          </div>
-
-          {/* Right Column */}
-          <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
-            {/* Analytics Snippet */}
-            {settings.showAnalyticsSnippet && (
-              <AnalyticsSnippet data={analyticsData} />
-            )}
-
-            {/* Quick Resources */}
-            {settings.showResources && (
-              <QuickResources />
-            )}
-          </div>
-        </div>
-
-        {/* Additional Grid Row for Larger Screens */}
-        <div className="grid grid-cols-12 gap-6 mt-6">
-          {/* Placeholder for future widgets or additional content */}
-          <div className="col-span-12 lg:col-span-6">
-            <div className="bg-card rounded-lg border border-border shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-card-foreground mb-4">Recent Activity</h3>
-              <p className="text-muted-foreground">Additional widgets can be added here to provide more insights.</p>
-            </div>
-          </div>
-          
-          <div className="col-span-12 lg:col-span-6">
-            <div className="bg-card rounded-lg border border-border shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-card-foreground mb-4">Quick Actions</h3>
-              <p className="text-muted-foreground">Common actions and shortcuts can be placed here for easy access.</p>
-            </div>
-          </div>
-        </div>
+        {/* Content area - now empty after removing widgets */}
+        
         </div>
       </main>
     </div>

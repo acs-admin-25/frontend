@@ -124,15 +124,42 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
       
       if (response.success && response.data?.data) {
         console.log('[useOptimisticConversations] Processing API response data...');
+        console.log('[useOptimisticConversations] Raw API data sample:', {
+          rawDataLength: response.data.data.length,
+          sampleRawData: response.data.data[0] ? {
+            thread: response.data.data[0].thread,
+            messages: response.data.data[0].messages?.length || 0
+          } : null
+        });
+        
         const processedConversations = processThreadsResponse(response.data.data);
         console.log('[useOptimisticConversations] Processed conversations:', {
           processedCount: processedConversations.length,
           sampleProcessed: processedConversations[0] ? {
             id: processedConversations[0].thread.conversation_id,
             lead_name: processedConversations[0].thread.lead_name,
+            client_email: processedConversations[0].thread.client_email,
+            source_name: processedConversations[0].thread.source_name,
             messagesCount: processedConversations[0].messages.length,
             lastMessageAt: processedConversations[0].thread.lastMessageAt
-          } : null
+          } : null,
+          // Check for duplicates
+          duplicateIds: processedConversations.reduce((acc, conv) => {
+            const id = conv.thread.conversation_id;
+            acc[id] = (acc[id] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>),
+          // Check for unknown leads
+          unknownLeads: processedConversations.filter(c => 
+            !c.thread.lead_name || 
+            c.thread.lead_name === 'unknown' || 
+            c.thread.lead_name === 'Unknown'
+          ).map(c => ({
+            id: c.thread.conversation_id,
+            lead_name: c.thread.lead_name,
+            client_email: c.thread.client_email,
+            source_name: c.thread.source_name
+          }))
         });
         
         setConversations(processedConversations);

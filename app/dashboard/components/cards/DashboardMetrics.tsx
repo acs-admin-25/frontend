@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useRef } from 'react';
 import { TrendingUp, TrendingDown, Users, MessageSquare, Target, Clock, Activity, Zap, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { DateRange } from 'react-day-picker';
-import type { DashboardMetrics as Metrics } from '@/types/dashboard';
+import type { DashboardMetrics as Metrics } from '@/lib/types/dashboard';
 import { calculateTrends, shouldShowTrend, formatTrendChange, getTrendDirection, type TrendData } from '@/lib/utils/dashboard';
 
 interface DashboardMetricsProps {
@@ -38,7 +38,7 @@ const MetricCard = ({
     const trendColor = trend === 'up' ? 'text-status-success' : trend === 'down' ? 'text-status-error' : 'text-muted-foreground';
 
     return (
-        <div className="bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-lg transition-all duration-300 group min-w-[280px] flex-shrink-0">
+        <div className="card bg-card p-6 rounded-xl border border-border shadow-sm hover:shadow-lg transition-all duration-300 group w-[240px] flex-shrink-0 h-[160px]">
             <div className="flex items-center justify-between mb-4">
                 <div className="flex-1">
                     <p className="text-sm font-medium text-muted-foreground mb-1">{name}</p>
@@ -74,7 +74,8 @@ const MetricCard = ({
 };
 
 export function DashboardMetrics({ data, dateRange, conversations = [] }: DashboardMetricsProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const trackRef = useRef<HTMLDivElement>(null);
+  const cardWidth = 240; // Fixed width for each card
   
   // Calculate trends if we have date range and conversations
   const trends = dateRange && dateRange.from && dateRange.to && conversations.length > 0 
@@ -189,66 +190,88 @@ export function DashboardMetrics({ data, dateRange, conversations = [] }: Dashbo
     },
   ];
 
-  const visibleMetrics = metrics.slice(currentIndex, currentIndex + 4);
-  const canGoLeft = currentIndex > 0;
-  const canGoRight = currentIndex + 4 < metrics.length;
-
-  const handlePrevious = () => {
-    if (canGoLeft) {
-      setCurrentIndex(Math.max(0, currentIndex - 1));
+  const handleScrollLeft = () => {
+    if (trackRef.current) {
+      trackRef.current.scrollBy({ left: -cardWidth, behavior: 'smooth' });
     }
   };
 
-  const handleNext = () => {
-    if (canGoRight) {
-      setCurrentIndex(Math.min(metrics.length - 4, currentIndex + 1));
+  const handleScrollRight = () => {
+    if (trackRef.current) {
+      trackRef.current.scrollBy({ left: cardWidth, behavior: 'smooth' });
     }
   };
 
   return (
     <div className="space-y-6">
       {/* Horizontal Metrics Carousel */}
-      <div className="relative">
-        {/* Metrics Container */}
-        <div className="flex gap-4 overflow-hidden">
-          {/* Key Metrics Header Card */}
-          <div className="bg-[#288e41] p-6 rounded-xl border border-[#047857] shadow-sm min-w-[200px] flex-shrink-0 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="p-3 rounded-lg bg-white/20">
+      <div className="relative w-full">
+        {/* Metrics Slider */}
+        <div 
+          ref={trackRef}
+          className="metrics-slider w-full"
+          style={{
+            display: 'flex',
+            overflow: 'hidden',
+            scrollSnapType: 'x mandatory',
+            gap: '1rem',
+            paddingLeft: '1rem',
+            paddingRight: '1rem',
+            alignItems: 'stretch'
+          }}
+        >
+          {/* Key Metrics Header Card - EXACT Same Structure as Other Cards */}
+          <div 
+            className="card bg-[#288e41] p-6 rounded-xl border border-[#047857] shadow-sm hover:shadow-lg transition-all duration-300 group w-[240px] flex-shrink-0 h-[160px]"
+            style={{ scrollSnapAlign: 'start' }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-white/80 mb-1">Key Metrics</p>
+                <p className="text-xs text-white/60">Performance Overview</p>
+              </div>
+              <div className="p-3 rounded-lg bg-white/20 group-hover:scale-110 transition-transform duration-200">
                 <BarChart3 className="h-6 w-6 text-white" />
               </div>
             </div>
-            <h3 className="text-xl font-bold text-white mb-1">Key Metrics</h3>
-            <p className="text-white/80 text-sm">Performance Overview</p>
+            <div className="space-y-2">
+              <p className="text-3xl font-bold text-white">Key Metrics</p>
+            </div>
           </div>
 
-          {/* Metric Cards Container with Relative Positioning */}
-          <div className="relative flex gap-4">
-            {/* Metric Cards */}
-            {visibleMetrics.map((metric) => (
-              <MetricCard key={`${metric.name}-${currentIndex}`} {...metric} />
-            ))}
-            
-            {/* Navigation Arrows - Positioned relative to metric cards */}
-            {canGoLeft && (
-              <button
-                onClick={handlePrevious}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-6 z-10 bg-white border border-border rounded-full p-3 shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                <ChevronLeft className="h-5 w-5 text-muted-foreground" />
-              </button>
-            )}
-            
-            {canGoRight && (
-              <button
-                onClick={handleNext}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-6 z-10 bg-white border border-border rounded-full p-3 shadow-lg hover:shadow-xl transition-all duration-200"
-              >
-                <ChevronRight className="h-5 w-5 text-muted-foreground" />
-              </button>
-            )}
-          </div>
+          {/* Metric Cards */}
+          {metrics.map((metric, index) => (
+            <div 
+              key={metric.name} 
+              style={{ scrollSnapAlign: 'start' }}
+            >
+              <MetricCard {...metric} />
+            </div>
+          ))}
         </div>
+        
+        {/* Navigation Arrows - Positioned on white cards only */}
+        <button
+          onClick={handleScrollLeft}
+          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-border rounded-full p-2 shadow-lg hover:shadow-xl transition-all duration-200 hover:bg-gray-50"
+          style={{ 
+            left: `${cardWidth + 16}px`, // Position after the green Key Metrics card (240px + 16px gap)
+            transform: 'translateY(-50%) translateX(-50%)' // Half on, half off positioning
+          }}
+        >
+          <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+        </button>
+        
+        <button
+          onClick={handleScrollRight}
+          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white border border-border rounded-full p-2 shadow-lg hover:shadow-xl transition-all duration-200 hover:bg-gray-50"
+          style={{ 
+            right: '0.5rem',
+            transform: 'translateY(-50%) translateX(50%)' // Half on, half off positioning
+          }}
+        >
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </button>
       </div>
     </div>
   );

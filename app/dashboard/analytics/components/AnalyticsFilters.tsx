@@ -170,9 +170,9 @@ export function AnalyticsFilters({ className, showResetButton = true }: Analytic
       {/* Active Filters Display */}
       <div className="mt-4 pt-4 border-t border-gray-200">
         <div className="flex flex-wrap gap-2">
-          {state.filters.dateRange !== '30d' && (
+          {state.filters.dateRange !== '7d' && (
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800">
-              {state.filters.dateRange === '7d' ? '7 Days' : 
+              {state.filters.dateRange === '30d' ? '30 Days' : 
                state.filters.dateRange === '90d' ? '90 Days' : 'Custom Range'}
             </span>
           )}

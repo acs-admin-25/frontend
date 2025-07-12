@@ -14,7 +14,7 @@ import type { Conversation } from '@/lib/types/conversation';
 export type DateRange = '24h' | '7d' | '30d' | '3m' | '6m' | '1y';
 
 export function DashboardTabs({ className, conversations }: { className?: string; conversations?: Conversation[] }) {
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('30d');
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('7d');
 
   // Add CSS for hiding scrollbar
   const scrollbarHideStyle = `

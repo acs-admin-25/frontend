@@ -120,7 +120,7 @@ export function FilterButton({ selectedDateRange, onDateRangeChange, className }
           <div className="border-t border-border pt-3 flex justify-between">
             <button
               onClick={() => {
-                onDateRangeChange('30d');
+                onDateRangeChange('7d');
                 setIsOpen(false);
               }}
               className="text-sm text-gray-500 hover:text-gray-700 transition-colors"

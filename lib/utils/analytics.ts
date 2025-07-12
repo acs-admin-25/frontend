@@ -1,9 +1,9 @@
-import { Conversation } from '@/types/conversation';
+import { Conversation } from '@/lib/types/conversation';
 import { DateRange } from '@/app/dashboard/components/tabs/DashboardTabs';
 import { subDays, format, subHours } from 'date-fns';
 
 // Generate chart data from real conversations
-export function generateChartData(conversations: Conversation[], dateRange: DateRange = '30d') {
+export function generateChartData(conversations: Conversation[], dateRange: DateRange = '7d') {
   let days: number;
   let dateFormat: string;
   let xAxisFormat: string;

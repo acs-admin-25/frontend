@@ -41,7 +41,7 @@ export function AnalyticsProvider({ children }: AnalyticsProviderProps) {
   } = useAnalyticsData();
 
   const [filters, setFilters] = useState<AnalyticsFilters>({
-    dateRange: '30d',
+    dateRange: '7d',
     conversationStatus: 'all',
     leadSource: '',
     searchQuery: ''

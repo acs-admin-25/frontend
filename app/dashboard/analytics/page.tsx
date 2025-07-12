@@ -101,7 +101,7 @@ function AnalyticsContent() {
         <div className="flex items-center space-x-3">
           <Button variant="outline" size="sm">
             <Calendar className="w-4 h-4 mr-2" />
-            30 Days
+            7 Days
           </Button>
           <Button variant="outline" size="sm" onClick={() => refetch()}>
             <RefreshCw className="w-4 h-4 mr-2" />

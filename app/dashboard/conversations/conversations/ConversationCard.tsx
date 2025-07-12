@@ -26,11 +26,14 @@ import {
   getLatestEvaluableMessage
 } from '@/lib/utils/conversation';
 
-import type { Conversation } from '@/types/conversation';
+import type { Conversation } from '@/lib/types/conversation';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { EVScoreInfoContent } from '@/app/dashboard/analytics/components/EVScoreInfoContent';
 import { EVScoreInfoModal } from '@/app/dashboard/analytics/components/EVScoreInfoModal';
 import { formatLocalTime } from '@/lib/utils/timezone';
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 // Color palette for conversation avatars
 const CONVERSATION_COLORS = [
@@ -110,7 +113,28 @@ export function ConversationCard({
   // Get conversation details using centralized utilities
   const conversationName = getConversationTitle(conversation);
   const subject = mostRecentMessage?.subject || 'No subject';
-  const lastMessageTime = mostRecentMessage?.timestamp ? formatLocalTime(mostRecentMessage.timestamp) : null;
+  // Get the most recent message timestamp using localDate
+  const getLastMessageTime = () => {
+    if (messages.length > 0) {
+      // Sort messages by localDate and get the most recent
+      const sortedMessages = [...messages].sort((a, b) => 
+        new Date(b.localDate).getTime() - new Date(a.localDate).getTime()
+      );
+      const mostRecent = sortedMessages[0];
+      if (mostRecent?.localDate) {
+        return mostRecent.localDate.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        });
+      }
+    }
+    return null;
+  };
+
+  const lastMessageTime = getLastMessageTime();
   const messageCount = messages.length;
   const isUnread = !localRead;
   const isFlagged = thread.flag;
@@ -186,152 +210,103 @@ export function ConversationCard({
 
   // Simple variant
   if (variant === 'simple') {
+    const cardClassName = cn(
+      "w-full max-w-4xl mx-auto rounded-lg border overflow-hidden transition-colors cursor-pointer",
+      updatingRead || updatingLcp || deleting ? 'opacity-50 pointer-events-none' : '',
+      isFlagged
+        ? 'bg-emerald-50 border-emerald-200'
+        : isFlaggedForReview
+        ? 'bg-yellow-50 border-yellow-200'
+        : 'bg-white border-gray-200'
+    );
+
     return (
-      <div
-        className={`flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors relative ${
-          updatingRead || updatingLcp || deleting ? 'opacity-50 pointer-events-none' : ''
-        } ${
-          isFlagged
-            ? 'border-status-success/20 bg-status-success/5'
-            : isFlaggedForReview
-            ? 'border-status-warning/20 bg-status-warning/5'
-            : 'border-border'
-        }`}
-        onClick={() => { if (!showEVModal) handleClick(); }}
-      >
-        {/* Status badges */}
-        {!isFlagged && isFlaggedForReview && (
-          <div className="absolute -top-2 -right-2 bg-status-warning text-status-warning-foreground px-2 py-0.5 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1">
-            <Flag className="w-3 h-3" />
-            <span className="hidden xs:inline">Flagged for Review</span>
-            <span className="xs:hidden">Review</span>
-          </div>
-        )}
-        {isFlagged && (
-          <div className="absolute -top-2 -right-2 bg-status-success text-status-success-foreground px-2 py-0.5 rounded-full text-xs font-semibold shadow-sm flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" />
-            <span className="hidden xs:inline">Flagged for Completion</span>
-            <span className="xs:hidden">Complete</span>
-          </div>
-        )}
-
-        {/* Delete button for simple variant */}
-        {onDelete && (
-          <button
-            className="absolute top-2 right-2 p-1.5 bg-status-error/10 text-status-error rounded-full hover:bg-status-error/20 transition-colors cursor-pointer z-10"
-            onClick={handleDelete}
-            disabled={deleting}
-            title="Delete conversation"
-          >
-            {deleting ? (
-              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <Trash2 className="w-3 h-3" />
-            )}
-          </button>
-        )}
-
-        <div className="flex items-start gap-3 w-full">
-          {/* Avatar */}
-          <div className="flex-shrink-0">
+      <Card className={cardClassName} onClick={() => { if (!showEVModal) handleClick(); }}>
+        <CardContent className="p-4 flex items-center justify-between gap-6">
+          {/* Left Section: Avatar, Name, Subject, Date, EV Score */}
+          <div className="flex items-start gap-4 flex-grow">
+            {/* Avatar */}
             <div 
-              className="w-10 h-10 rounded-full flex items-center justify-center shadow-sm"
-              style={{ backgroundColor: avatarColor }}
+              className="w-11 h-11 flex items-center justify-center shadow-sm bg-[#0e6537]"
+              style={{ 
+                borderRadius: '50%',
+                width: '44px',
+                height: '44px',
+                minWidth: '44px',
+                minHeight: '44px'
+              }}
             >
-              <span className="text-sm font-semibold text-white">
+              <span className="text-base font-semibold text-white">
                 {initials}
               </span>
             </div>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-1">
-              <h4 className="text-sm font-medium text-card-foreground truncate">
-                {conversationName}
-              </h4>
+            
+            <div className="grid gap-0.5">
               <div className="flex items-center gap-2">
+                <div className="font-bold text-lg text-gray-900">{conversationName}</div>
+                {isFlagged && (
+                  <Badge className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Completed
+                  </Badge>
+                )}
+                {isFlaggedForReview && (
+                  <Badge className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
+                    <Flag className="w-3 h-3" /> Review
+                  </Badge>
+                )}
                 {isUnread && (
-                  <div className="flex items-center gap-1 px-2 py-0.5 bg-status-error/10 text-status-error text-xs rounded-full font-semibold">
-                    <Bell className="w-3 h-3" />
-                    <span className="hidden sm:inline">New</span>
-                  </div>
-                )}
-                {isPendingReply && (
-                  <div className="flex items-center gap-1 text-status-warning" title="Awaiting your reply">
-                    <Clock className="w-3 h-3" />
-                  </div>
+                  <Badge className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1">
+                    <Bell className="w-3 h-3" /> New
+                  </Badge>
                 )}
               </div>
-            </div>
-
-            <p className="text-sm text-muted-foreground font-medium mb-1 truncate">
-              {subject}
-            </p>
-
-            {/* AI Summary */}
-            {thread.ai_summary && (
-              <p className="text-xs text-muted-foreground/70 mb-2 line-clamp-2">
-                {thread.ai_summary}
-              </p>
-            )}
-
-            {/* Property Details */}
-            <div className="flex flex-wrap gap-2 mb-2">
-              {/* Price Range */}
-              {thread.budget_range && (
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full font-medium">
-                  <span className="font-semibold">💰</span>
-                  <span>{thread.budget_range}</span>
-                </div>
-              )}
-              
-              {/* Location */}
-              {thread.location && (
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-secondary/10 text-secondary text-xs rounded-full font-medium">
-                  <span className="font-semibold">📍</span>
-                  <span>{thread.location}</span>
-                </div>
-              )}
-              
-              {/* Property Types */}
-              {thread.preferred_property_types && (
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-accent/10 text-accent text-xs rounded-full font-medium">
-                  <span className="font-semibold">🏠</span>
-                  <span>{thread.preferred_property_types}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{messageCount} message{messageCount !== 1 ? 's' : ''}</span>
-                {lastMessageTime && (
-                  <span>{lastMessageTime.toLocaleString()}</span>
+              <div className="text-base text-gray-800">
+                {mostRecentMessage?.content ? 
+                  mostRecentMessage.content.length > 100 
+                    ? `${mostRecentMessage.content.substring(0, 100)}...` 
+                    : mostRecentMessage.content
+                  : 'No message content'
+                }
+              </div>
+              <div className="flex items-center gap-3 text-xs text-gray-500 mt-2">
+                <Clock className="w-3 h-3" /> {lastMessageTime || 'Unknown time'}
+                {score >= 0 && (
+                  <span className="ml-3 text-emerald-600 font-medium flex items-center gap-1">
+                    EV: {score} 
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowEVModal(true); }}
+                      className="hover:bg-emerald-100 rounded-full p-0.5 transition-colors"
+                      title="View EV Score details"
+                    >
+                      <Info className="w-3 h-3" />
+                    </button>
+                  </span>
                 )}
               </div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground/50" />
             </div>
           </div>
 
-          {/* EV Score - Bigger and on the right */}
-          {score >= 0 && (
-            <div className="flex-shrink-0">
-              <button
-                className="px-3 py-2 rounded-lg text-sm font-bold shadow-md flex items-center gap-1 focus:outline-none"
-                style={evColorStyle}
-                onClick={e => { e.stopPropagation(); setShowEVModal(true); }}
-                aria-label="Show EV Score info"
-                type="button"
-              >
-                <Info className="w-4 h-4 mr-1" />
-                EV {score}
-              </button>
-              <EVScoreInfoModal isOpen={showEVModal} onClose={() => setShowEVModal(false)} score={score} modalId={`ev-modal-card-${conversation.thread.conversation_id}`} />
-            </div>
-          )}
-        </div>
-      </div>
+          {/* Right Section: Button */}
+          <div className="flex-shrink-0">
+            <Button
+              variant="outline"
+              className="px-4 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 border-[#0e6537] text-[#0e6537] hover:bg-[#0e6537]/10 bg-transparent"
+            >
+              View Details <ChevronRight className="w-3 h-3" />
+            </Button>
+          </div>
+        </CardContent>
+        
+        {/* EV Score Modal */}
+        {score >= 0 && (
+          <EVScoreInfoModal 
+            isOpen={showEVModal} 
+            onClose={() => setShowEVModal(false)} 
+            score={score} 
+            modalId={`ev-modal-card-${conversation.thread.conversation_id}`} 
+          />
+        )}
+      </Card>
     );
   }
 
@@ -446,7 +421,7 @@ export function ConversationCard({
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span>{messageCount} message{messageCount !== 1 ? 's' : ''}</span>
               {lastMessageTime && (
-                <span>{lastMessageTime.toLocaleString()}</span>
+                <span>{lastMessageTime}</span>
               )}
             </div>
             <ChevronRight className="w-4 h-4 text-muted-foreground/50" />

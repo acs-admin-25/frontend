@@ -103,8 +103,8 @@ export function AnalyticsHeader({
             <div>
               <span className="text-gray-500">Date Range:</span>
               <span className="ml-2 font-medium">
-                {state.filters.dateRange === '7d' ? '7 Days' : 
-                 state.filters.dateRange === '30d' ? '30 Days' : 
+                {state.filters.dateRange === '30d' ? '30 Days' : 
+                 state.filters.dateRange === '7d' ? '7 Days' : 
                  state.filters.dateRange === '90d' ? '90 Days' : 'Custom Range'}
               </span>
             </div>

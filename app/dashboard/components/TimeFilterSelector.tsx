@@ -75,7 +75,7 @@ export function TimeFilterSelector({ selectedDateRange, onDateRangeChange, class
           </div>
           <div className="border-t border-border mt-2 pt-2">
             <button 
-              onClick={() => onDateRangeChange('30d')}
+              onClick={() => onDateRangeChange('7d')}
               className="w-full flex items-center justify-center px-2 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
             >
               Clear

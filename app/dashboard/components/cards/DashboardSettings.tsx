@@ -33,9 +33,9 @@ interface DashboardSettingsContextType {
 }
 
 const defaultSettings: DashboardSettings = {
-  timeRange: '30d',
+  timeRange: '7d',
   dateRange: {
-    from: new Date(new Date().setDate(new Date().getDate() - 30)),
+    from: new Date(new Date().setDate(new Date().getDate() - 7)),
     to: new Date(),
   },
   chartType: 'line',

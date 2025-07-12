@@ -43,10 +43,10 @@ export function RecentConversations({ conversations = [] }: RecentConversationsP
         // Try to fetch saved contacts from the database
         // If the table doesn't exist, we'll just use an empty array
         const response = await apiClient.dbSelect({
-          table_name: 'Contacts',
-          index_name: 'account_id-index',
-          key_name: 'account_id',
-          key_value: session?.user?.id || ''
+          table_name: 'ManualContacts',
+          index_name: 'associated_account-index',
+          key_name: 'associated_account',
+          key_value: (session?.user as any)?.id || ''
         });
 
         if (response.success && response.data) {

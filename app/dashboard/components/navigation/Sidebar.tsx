@@ -8,7 +8,7 @@
 
 "use client"
 import React from "react"
-import { Home, Mail, Users, MessageSquare, BarChart3, Settings, Phone, Calendar, PanelLeft, AlertTriangle, RefreshCw, ChevronDown, X, Shield, ShieldOff, FileText, Menu, Trash2, CreditCard, LogOut, ChevronLeft, ChevronRight, Clock } from "lucide-react"
+import { Home, Mail, Users, MessageSquare, BarChart3, Settings, Phone, Calendar, PanelLeft, AlertTriangle, RefreshCw, ChevronDown, X, Shield, ShieldOff, FileText, Menu, Trash2, CreditCard, LogOut, ChevronLeft, ChevronRight, Clock, Copy } from "lucide-react"
 import { useState, createContext, useContext, useEffect, useRef, useMemo, useCallback, memo } from "react"
 import { useSession, signOut } from "next-auth/react"
 import type { Session } from "next-auth"
@@ -17,6 +17,7 @@ import { Logo } from "@/components/ui/Logo"
 import { useRouter, usePathname } from "next/navigation"
 import { cn } from "@/lib/utils/utils"
 import { navigationGroups, type NavigationItem } from './SidebarData'
+import { useAcsMail } from '@/lib/hooks/useAcsMail';
 /**
  * SidebarContext
  * Context for managing sidebar state across components
@@ -380,6 +381,7 @@ interface UserProfileProps {
 
 const UserProfile = memo(function UserProfile({ user }: UserProfileProps) {
   const { isOpen } = useSidebar()
+  // Removed useAcsMail and copy logic
 
   return (
     <SidebarGroup isExpanded={true} onToggle={() => {}} onExpand={() => {}}>
@@ -388,14 +390,14 @@ const UserProfile = memo(function UserProfile({ user }: UserProfileProps) {
           <span className="text-white font-semibold text-sm">
             {user.name
               ? user.name.split(' ').map(n => n[0]).join('').toUpperCase()
-              : user.email?.charAt(0).toUpperCase() || 'U'
+              : 'U'
             }
           </span>
         </div>
         {isOpen && (
           <div className="flex flex-col min-w-0">
-            <span className="text-white font-medium text-sm truncate">{user.name || 'User'}</span>
-            <span className="text-white/80 text-xs truncate">{user.email}</span>
+            <span className="text-white font-medium text-sm truncate mb-0.5">{user.name || 'User'}</span>
+            {/* ACS email removed */}
           </div>
         )}
       </div>

@@ -18,7 +18,9 @@ import {
   User,
   ChevronDown,
   Palette,
-  Check
+  Check,
+  Copy,
+  Info
 } from 'lucide-react';
 import { format } from 'date-fns';
 import Link from 'next/link';
@@ -26,6 +28,9 @@ import { useDashboardSettings, DashboardSettingsPanel } from './DashboardSetting
 import { cn } from '@/lib/utils/utils';
 import { useSimpleTheme } from '@/lib/theme/simple-theme-provider';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { useAcsMail } from '@/lib/hooks/useAcsMail';
+import { AcsMailModal } from './AcsMailModal';
+
 
 interface DashboardHeaderProps {
   activeLeads?: number;
@@ -77,6 +82,17 @@ export function DashboardHeader({
     return { greeting: 'Good evening', icon: <Moon className="h-5 w-5 text-text-on-gradient" /> };
   };
   const { greeting, icon } = getTimeBasedGreeting();
+
+  const { acsMail, loading: acsMailLoading } = useAcsMail();
+  const [copied, setCopied] = React.useState(false);
+  const [showModal, setShowModal] = React.useState(false);
+  const handleCopy = () => {
+    if (acsMail) {
+      navigator.clipboard.writeText(acsMail);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    }
+  };
 
   return (
     <div
@@ -273,10 +289,29 @@ export function DashboardHeader({
         <p className="text-xl text-text-on-gradient opacity-95 mb-2 leading-relaxed">
           Here's your real estate performance snapshot for today
         </p>
-        <p className="text-text-on-gradient opacity-90 flex items-center gap-2 text-base">
-          <Clock className="h-4 w-4 flex-shrink-0" />
-          <span className="truncate">{currentDate}</span>
-        </p>
+        {/* Date and ACS mail inline, minimal style */}
+        <div className="flex flex-wrap items-center gap-3 text-text-on-gradient opacity-90 text-sm sm:text-base mb-2">
+          <span className="flex items-center gap-1">
+            <Clock className="h-4 w-4 flex-shrink-0" />
+            <span>{currentDate}</span>
+          </span>
+          <span className="hidden sm:inline-block">|</span>
+          {acsMailLoading ? (
+            <span className="text-white/60 text-xs animate-pulse">Loading email...</span>
+          ) : acsMail ? (
+            <span className="flex items-center gap-1 font-mono text-white text-xs sm:text-sm">
+              {acsMail}
+              <button type="button" className="p-0.5 rounded-full hover:bg-white/10 focus:outline-none" onClick={() => setShowModal(true)}>
+                <Info className="h-4 w-4 text-white/60 hover:text-green-700 transition-colors" />
+              </button>
+              <button type="button" className="p-0.5 rounded-full hover:bg-white/10 focus:outline-none" onClick={handleCopy}>
+                <Copy className={`h-4 w-4 ${copied ? 'text-green-500' : 'text-white/40'} transition-colors`} />
+              </button>
+              {copied && <span className="ml-1 text-white text-[10px]">Copied!</span>}
+            </span>
+          ) : null}
+        </div>
+        <AcsMailModal open={showModal} onClose={() => setShowModal(false)} acsMail={acsMail} />
       </div>
     </div>
   );

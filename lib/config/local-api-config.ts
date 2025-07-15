@@ -14,6 +14,7 @@ export const config = {
     ? process.env.GOOGLE_CLIENT_SECRET_DEV
     : process.env.GOOGLE_CLIENT_SECRET_PROD,
   NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-  API_URL: process.env.NEXT_PUBLIC_API_GATEWAY_URL,
+  // Updated to use GCP API Gateway URL
+  API_URL: process.env.NEXT_PUBLIC_GCP_API_GATEWAY_URL || process.env.NEXT_PUBLIC_API_GATEWAY_URL,
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY
 }; 

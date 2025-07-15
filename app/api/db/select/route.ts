@@ -9,14 +9,11 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { table_name, index_name, key_name, key_value } = body;
 
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
     // Get session using getServerSession with authOptions
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
+    const session = await getServerSession(authOptions) as Session & { 
+      user: { id: string; accessToken?: string };
+      sessionId?: string;
+    };
     
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -26,33 +23,34 @@ export async function POST(request: Request) {
     }
 
     // Validate required parameters
-    if (!table_name || !index_name || !key_name || key_value === undefined) {
-      console.error('[db/select] Missing required parameters:', { table_name, index_name, key_name, key_value });
+    if (!table_name || !key_name || key_value === undefined) {
+      console.error('[db/select] Missing required parameters:', { table_name, key_name, key_value });
       return NextResponse.json(
         { error: 'Missing required parameters' },
         { status: 400 }
       );
     }
 
-    // Construct the API URL with parameters
-    const apiUrl = `${config.API_URL}/db/select`;
+    // Convert to GCP Firestore format
+    const gcpParams = {
+      collection_name: table_name,
+      key_name,
+      key_value,
+      account_id: session.user.id,
+      filters: {},
+      limit: 100,
+      order_by: 'created_at',
+      order_direction: 'desc'
+    };
 
-    
-    // Make the request to the API
-    const response = await fetch(apiUrl, {
+    // Make the request to the GCP API Gateway
+    const response = await fetch(`${config.API_URL}/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken || session.sessionId}` // Use JWT token from session
       },
-      body: JSON.stringify({
-        table_name,
-        index_name,
-        key_name,
-        key_value,
-        account_id: session.user.id
-      }),
-      credentials: 'include',
+      body: JSON.stringify(gcpParams),
     });
 
     // Get the response text
@@ -63,10 +61,9 @@ export async function POST(request: Request) {
         status: response.status,
         statusText: response.statusText,
         error: responseText,
-        url: apiUrl,
+        url: `${config.API_URL}/db/select`,
         requestBody: {
-          table_name,
-          index_name,
+          collection_name: table_name,
           key_name,
           key_value: typeof key_value === 'string' ? key_value.substring(0, 10) + '...' : key_value
         }
@@ -106,22 +103,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Handle the response which is an array directly
-    if (!Array.isArray(data)) {
-      console.error('[db/select] Expected array response but got:', {
-        type: typeof data,
-        data: JSON.stringify(data).substring(0, 200) + '...'
-      });
+    // Handle the GCP response format
+    if (!data.success) {
+      console.error('[db/select] GCP API returned error:', data);
       return NextResponse.json(
-        { error: 'Invalid response format - expected array' },
+        { error: data.error || 'Database query failed' },
         { status: 500 }
       );
     }
 
-    // Return the array directly as items
+    // Return the items from the GCP response
     return NextResponse.json({
       success: true,
-      items: data
+      items: data.data?.items || []
     });
 
   } catch (error) {

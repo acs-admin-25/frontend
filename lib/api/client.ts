@@ -41,9 +41,10 @@ export class ApiClient {
   private cacheTTL: number = 5 * 60 * 1000; // 5 minutes
   private currentUserId: string | null = null;
   private retryConfig: RetryConfig;
+  private authToken: string | null = null;
 
   constructor(retryConfig?: Partial<RetryConfig>) {
-    this.baseURL = process.env.NEXT_PUBLIC_API_URL || '/api';
+    this.baseURL = process.env.NEXT_PUBLIC_GCP_API_GATEWAY_URL || process.env.NEXT_PUBLIC_API_URL || '/api';
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
@@ -89,6 +90,33 @@ export class ApiClient {
     conversationStorage.initialize(userId);
   }
 
+  /**
+   * Set authentication token for GCP backend
+   */
+  setAuthToken(token: string): void {
+    this.authToken = token;
+  }
+
+  /**
+   * Remove authentication token
+   */
+  removeAuthToken(): void {
+    this.authToken = null;
+  }
+
+  /**
+   * Get authentication headers
+   */
+  private getAuthHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {};
+    
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
+    
+    return headers;
+  }
+
   async request<T>(
     endpoint: string,
     options: RequestOptions = {}
@@ -112,6 +140,7 @@ export class ApiClient {
           method: options.method || 'GET',
           headers: {
             ...this.defaultHeaders,
+            ...this.getAuthHeaders(),
             ...options.headers,
           },
           body: options.body ? JSON.stringify(options.body) : undefined,
@@ -187,9 +216,10 @@ export class ApiClient {
           throw handleApiError({ status: response.status, data });
         }
 
+        // Handle GCP response format
         const result: ApiResponse<T> = {
-          success: true,
-          data,
+          success: data?.success ?? true,
+          data: data?.data ?? data,
           status: response.status,
         };
 
@@ -199,105 +229,80 @@ export class ApiClient {
         }
 
         return result;
-        
+
       } catch (error) {
         lastError = error;
         
-        // Check if this is a retryable error
-        if (this.isRetryableError(error)) {
-          // If this is the last attempt, break and throw the error
-          if (attempt === this.retryConfig.maxRetries) {
-            break;
-          }
-          
-          // Calculate delay and retry
-          const delay = this.calculateDelay(attempt);
-          console.warn(`[ApiClient] Retryable error on attempt ${attempt}/${this.retryConfig.maxRetries} for ${endpoint}, retrying in ${delay}ms:`, {
-            error: error instanceof Error ? error.message : String(error)
-          });
-          
-          await this.sleep(delay);
-          continue;
+        // If this is the last attempt, throw the error
+        if (attempt === this.retryConfig.maxRetries) {
+          throw error;
         }
         
-        // Non-retryable error, throw immediately
-        break;
+        // Check if this is a retryable error
+        if (this.isRetryableError(error)) {
+          const delay = this.calculateDelay(attempt);
+          console.warn(`[ApiClient] Retryable error on attempt ${attempt}/${this.retryConfig.maxRetries} for ${endpoint}, retrying in ${delay}ms:`, error);
+          await this.sleep(delay);
+        } else {
+          // Non-retryable error, throw immediately
+          throw error;
+        }
       }
     }
     
-    // More robust error logging
-    const errorInfo = {
-      message: lastError instanceof Error ? lastError.message : String(lastError),
-      name: lastError instanceof Error ? lastError.name : 'Unknown',
-      stack: lastError instanceof Error ? lastError.stack : undefined,
-      type: typeof lastError,
-      url,
-      endpoint,
-      method: options.method || 'GET',
-      attempts: this.retryConfig.maxRetries
-    };
-    
-    console.error(`[ApiClient] Request failed after ${this.retryConfig.maxRetries} attempts for ${endpoint}:`, errorInfo);
-    
-    const appError = handleApiError(lastError);
-    return {
-      success: false,
-      error: appError.message,
-      status: appError.status || 500,
-    };
+    throw lastError;
   }
 
-  // Database operations with optimistic updates
+  // Database operations
   async dbSelect(params: DbSelectParams): Promise<ApiResponse<DbSelectResponse>> {
-    return this.request<DbSelectResponse>('db/select', { method: 'POST', body: params });
+    // Convert AWS DynamoDB format to GCP Firestore format
+    const gcpParams = {
+      collection_name: params.table_name,
+      key_name: params.key_name,
+      key_value: params.key_value,
+      account_id: this.currentUserId,
+      // Add optional filters and pagination
+      filters: {},
+      limit: 100,
+      order_by: 'created_at',
+      order_direction: 'desc'
+    };
+
+    return this.request<DbSelectResponse>('db/select', {
+      method: 'POST',
+      body: gcpParams
+    });
   }
 
   async dbUpdate(params: DbUpdateParams): Promise<ApiResponse<DbUpdateResponse>> {
-    // Apply optimistic update for conversation-related updates
-    if (params.table_name === 'Threads' && params.key_name === 'conversation_id') {
-      const conversationId = params.key_value;
-      const updates = params.update_data;
-      
-      // Apply optimistic update to local storage
-      if (this.currentUserId) {
-        conversationStorage.updateConversation(conversationId, {
-          thread: {
-            conversation_id: conversationId,
-            ...updates
-          } as any
-        });
-      }
-    }
+    // Convert AWS DynamoDB format to GCP Firestore format
+    const gcpParams = {
+      collection_name: params.table_name,
+      key_name: params.key_name,
+      key_value: params.key_value,
+      update_data: params.update_data,
+      account_id: this.currentUserId
+    };
 
-    const response = await this.request<DbUpdateResponse>('db/update', { method: 'POST', body: params });
-    
-    // If update failed, we could implement rollback here
-    if (!response.success && this.currentUserId) {
-      console.warn('[ApiClient] Database update failed, optimistic update may be stale');
-    }
-    
-    return response;
+    return this.request<DbUpdateResponse>('db/update', {
+      method: 'POST',
+      body: gcpParams
+    });
   }
 
   async dbDelete(params: DbDeleteParams): Promise<ApiResponse<DbDeleteResponse>> {
-    // Apply optimistic update for conversation deletion
-    if (params.table_name === 'Threads' && params.attribute_name === 'conversation_id') {
-      const conversationId = params.attribute_value;
-      
-      // Apply optimistic update to local storage
-      if (this.currentUserId) {
-        conversationStorage.removeConversation(conversationId);
-      }
-    }
+    // Convert AWS DynamoDB format to GCP Firestore format
+    const gcpParams = {
+      collection_name: params.table_name,
+      key_name: params.attribute_name,
+      key_value: params.attribute_value,
+      account_id: this.currentUserId
+    };
 
-    const response = await this.request<DbDeleteResponse>('db/delete', { method: 'POST', body: params });
-    
-    // If deletion failed, we could implement rollback here
-    if (!response.success && this.currentUserId) {
-      console.warn('[ApiClient] Database deletion failed, optimistic update may be stale');
-    }
-    
-    return response;
+    return this.request<DbDeleteResponse>('db/delete', {
+      method: 'POST',
+      body: gcpParams
+    });
   }
 
   // LCP operations with storage integration
@@ -446,22 +451,44 @@ export class ApiClient {
     return this.request('lcp/get_llm_response', { method: 'POST', body: request });
   }
 
-  // Authentication operations
+  // Authentication methods
   async login(credentials: { email: string; password: string; provider?: string; name?: string }): Promise<ApiResponse<any>> {
-    return this.request('api/auth/login', { method: 'POST', body: credentials });
+    const response = await this.request<any>('auth/login', {
+      method: 'POST',
+      body: credentials
+    });
+
+    // Store the JWT token if login was successful
+    if (response.success && response.data?.session?.token) {
+      this.setAuthToken(response.data.session.token);
+    }
+
+    return response;
   }
 
   async signup(userData: any): Promise<ApiResponse<any>> {
-    return this.request('api/auth/signup', { method: 'POST', body: userData });
+    const response = await this.request<any>('auth/signup', {
+      method: 'POST',
+      body: userData
+    });
+
+    // Store the JWT token if signup was successful
+    if (response.success && response.data?.session?.token) {
+      this.setAuthToken(response.data.session.token);
+    }
+
+    return response;
   }
 
   async logout(): Promise<ApiResponse<void>> {
-    // Clear local storage on logout
-    if (this.currentUserId) {
-      conversationStorage.clear();
-      this.currentUserId = null;
-    }
-    return this.request('auth/logout', { method: 'POST' });
+    const response = await this.request<void>('auth/logout', {
+      method: 'POST'
+    });
+
+    // Clear the JWT token on logout
+    this.removeAuthToken();
+
+    return response;
   }
 
   // Contact operations
@@ -501,16 +528,6 @@ export class ApiClient {
       }
     });
     keysToDelete.forEach(key => this.cache.delete(key));
-  }
-
-  // Set authentication token
-  setAuthToken(token: string): void {
-    this.defaultHeaders['Authorization'] = `Bearer ${token}`;
-  }
-
-  // Remove authentication token
-  removeAuthToken(): void {
-    delete this.defaultHeaders['Authorization'];
   }
 
   // Get storage statistics

@@ -1,5 +1,8 @@
 import { config } from '@/lib/config/local-api-config';
 import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/auth/auth-options';
+import { Session } from 'next-auth';
 
 export async function POST(request: Request) {
   try {
@@ -13,26 +16,34 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-    const url = `${config.API_URL}/lcp/get-thread-attrs`;
-    
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
 
+    // Get session to verify user is authenticated
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
+    if (!session?.user?.id || !session?.user?.accessToken) {
+      return NextResponse.json(
+        { error: 'Unauthorized - No authenticated user or token found' },
+        { status: 401 }
+      );
+    }
+
+    const url = `${config.API_URL}/api/lcp/get-thread-attrs`;
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
-      credentials: 'include',
       body: JSON.stringify({ conversationId }),
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        errorData = { message: 'Unable to read error response' };
+      }
       console.error('Error:', errorData);
       console.error('Status:', response.status);
       return NextResponse.json(

@@ -9,10 +9,10 @@ export async function POST(request: Request) {
     const { conversation_id, account_id, is_first_email } = await request.json();
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
@@ -36,25 +36,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
     // Make request to the config API endpoint
-    const response = await fetch(`${config.API_URL}/lcp/get-llm-response`, {
+    const response = await fetch(`${config.API_URL}/api/lcp/get-llm-response`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
-      credentials: 'include',
       body: JSON.stringify({
         "conversation_id": conversation_id,
         "account_id": account_id,
-        "is_first_email": Boolean(is_first_email),
-        "session_id": sessionId
+        "is_first_email": Boolean(is_first_email)
       }),
     });
 

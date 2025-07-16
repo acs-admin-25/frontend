@@ -1,12 +1,21 @@
 import { Session, User } from 'next-auth';
 
 /**
- * Handles session cookie management
+ * Handles session token management for GCP
  * @param session The current session object
  * @returns void
  */
 export const handleSessionCookie = (session: Session): void => {
-    // First try to get session_id from session.sessionId (set by NextAuth session callback)
+    // Handle JWT token for GCP
+    if ((session as any).sessionToken) {
+        // Store JWT token in localStorage for API client
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('gcp_jwt_token', (session as any).sessionToken);
+        }
+        return;
+    }
+    
+    // Fallback to legacy session_id approach
     if ((session as any).sessionId) {
         const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
         const cookieString = `session_id=${(session as any).sessionId}; path=/; samesite=lax${secure}`;
@@ -27,7 +36,6 @@ export const handleSessionCookie = (session: Session): void => {
             const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
             const cookieString = `session_id=${match[1]}; path=/; samesite=lax${secure}`;
             document.cookie = cookieString;
-        } else {
         }
     }
 };
@@ -87,6 +95,7 @@ export const clearAuthData = (): void => {
     // Clear localStorage items
     localStorage.removeItem('authType');
     localStorage.removeItem('next-auth.session-token');
+    localStorage.removeItem('gcp_jwt_token'); // Clear GCP JWT token
     
     // Clear sessionStorage items
     sessionStorage.removeItem('next-auth.session-token');
@@ -182,6 +191,38 @@ export const verifySessionCookie = (): boolean => {
     
     const sessionId = sessionIdCookie.split('=')[1]?.trim();
     return !!sessionId && sessionId.length > 0;
+};
+
+/**
+ * Gets the JWT token from localStorage
+ * @returns string | null The JWT token or null if not found
+ */
+export const getJwtToken = (): string | null => {
+    if (typeof window === 'undefined') {
+        return null;
+    }
+    return localStorage.getItem('gcp_jwt_token');
+};
+
+/**
+ * Sets the JWT token in localStorage
+ * @param token The JWT token to store
+ * @returns void
+ */
+export const setJwtToken = (token: string): void => {
+    if (typeof window !== 'undefined') {
+        localStorage.setItem('gcp_jwt_token', token);
+    }
+};
+
+/**
+ * Clears the JWT token from localStorage
+ * @returns void
+ */
+export const clearJwtToken = (): void => {
+    if (typeof window !== 'undefined') {
+        localStorage.removeItem('gcp_jwt_token');
+    }
 };
 
 /**

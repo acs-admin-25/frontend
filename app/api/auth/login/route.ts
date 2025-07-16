@@ -17,12 +17,19 @@ export async function POST(request: Request) {
         }
         
         // Call GCP API Gateway
-        const response = await fetch(`${config.API_URL}/auth/login`, {
+        const apiUrl = `${config.API_URL}/api/auth/login`;
+        console.log('Login API - Calling URL:', apiUrl);
+        console.log('Login API - Config API_URL:', config.API_URL);
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password, provider, name }),
         });
 
+        console.log('Login API - Response status:', response.status);
+        console.log('Login API - Response headers:', Object.fromEntries(response.headers.entries()));
+        
         const data = await response.json();
 
         if (!response.ok) {

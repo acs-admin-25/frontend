@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import type { SignupData } from '@/types/auth';
+import type { SignupData } from '@/lib/types/auth';
 import { config } from '@/lib/config/local-api-config';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
- * Handles user signup requests
+ * Handles user signup requests for GCP backend
  * @param {Request} request - The incoming request object
  * @param {Object} request.body - The request body containing signup data
  * @param {string} request.body.name - User's full name
@@ -12,7 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
  * @param {string} request.body.password - User's password (required for form-based signup)
  * @param {string} request.body.provider - Signup provider ('form' | 'google')
  * @param {string} request.body.captchaToken - reCAPTCHA verification token
- * @returns {Promise<NextResponse>} Response containing signup result or error
+ * @returns {Promise<NextResponse>} Response containing signup result with JWT token or error
  */
 export async function POST(request: Request) {
     try {
@@ -65,65 +65,57 @@ export async function POST(request: Request) {
         // generate a uuid for the user
         const id = uuidv4();
         
-        // Forward the request to AWS API Gateway
-        const response = await fetch(config.API_URL + '/users/auth/create', {
+        // Forward the request to GCP API Gateway
+        const apiUrl = `${config.API_URL}/api/auth/signup`;
+        console.log('Signup API - Calling URL:', apiUrl);
+        console.log('Signup API - Config API_URL:', config.API_URL);
+        
+        const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ ...signupData, name, id }),
+            body: JSON.stringify({ 
+                name,
+                email: signupData.email,
+                password: signupData.password,
+                provider: signupData.provider,
+                captchaToken: signupData.captchaToken
+            }),
         });
 
+        console.log('Signup API - Response status:', response.status);
+        console.log('Signup API - Response headers:', Object.fromEntries(response.headers.entries()));
+        
         const data = await response.json();
 
         if (!response.ok) {
             return NextResponse.json(
-                { error: data.message || 'Failed to sign up' },
+                { 
+                    error: data.error?.message || data.message || 'Failed to sign up',
+                    details: data.error?.details
+                },
                 { status: response.status }
             );
         }
 
-        // Handle the session_id cookie from the API response
-        const setCookieHeader = response.headers.get('set-cookie');
-        
-        // Extract session_id from the cookie header
-        let sessionId = null;
-        if (setCookieHeader) {
-            const sessionIdMatch = setCookieHeader.match(/session_id=([^;,\s]+)/);
-            if (sessionIdMatch?.[1]) {
-                sessionId = sessionIdMatch[1];
-            }
-        }
-        
-        // Create response with the session token
-        const nextResponse = NextResponse.json({
+        // Return JWT token response for GCP
+        return NextResponse.json({
             success: true,
             data: {
-                ...data,
-                session: {
-                    user: {
-                        id: data.id || data.user?.id || id, // Use backend ID if available, fallback to local ID
-                        email: data.email,
-                        name: name,
-                        provider: signupData.provider,
-                        authType: 'new'
-                    }
+                user: {
+                    id: data.data?.user?.id || data.user?.id || id,
+                    email: signupData.email,
+                    name: name,
+                    provider: signupData.provider,
+                    authType: 'new'
                 },
-                sessionId, // Include session_id in response body
+                session: {
+                    token: data.data?.session?.token || data.session?.token,
+                    expires_at: data.data?.session?.expires_at || data.session?.expires_at
+                }
             }
         });
-
-        // Forward all cookies if there are multiple
-        setCookieHeader?.split(',').forEach(cookie => {
-            let cookieToSet = cookie.trim();
-            if (process.env.NODE_ENV !== 'production') {
-                // Remove Secure attribute for local development
-                cookieToSet = cookieToSet.replace(/; ?secure/gi, '');
-            }
-            nextResponse.headers.append('set-cookie', cookieToSet);
-        });
-
-        return nextResponse;
     } catch (error: any) {
         console.error('Signup error:', error);
         return NextResponse.json(

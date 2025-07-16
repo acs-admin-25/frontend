@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { config } from '@/lib/config/local-api-config';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/auth-options';
+import { Session } from 'next-auth';
 import { format } from 'date-fns';
 
 interface Invocation {
@@ -13,22 +14,16 @@ interface Invocation {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
     const { searchParams } = new URL(request.url);
     const timeRange = searchParams.get('timeRange') || '1y';
     
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
-
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
 
     // If API_URL is not configured, return mock data for testing
     if (!config.API_URL) {
@@ -70,21 +65,23 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch all invocations for the user
-    const response = await fetch(`${config.API_URL}/db/select`, {
+    // Fetch all invocations for the user from GCP backend
+    const response = await fetch(`${config.API_URL}/api/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Invocations',
-        index_name: 'associated_account-index',
+        collection_name: 'Invocations',
         key_name: 'associated_account',
         key_value: session.user.id,
-        account_id: session.user.id
+        account_id: session.user.id,
+        filters: {},
+        limit: 1000,
+        order_by: 'timestamp',
+        order_direction: 'desc'
       }),
-      credentials: 'include',
     });
 
     if (!response.ok) {

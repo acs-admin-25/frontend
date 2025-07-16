@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { verifySessionCookie } from '@/lib/auth/auth-utils';
+import { getJwtToken } from '@/lib/auth/auth-utils';
 
 interface UseSessionVerificationOptions {
   redirectTo?: string;
@@ -15,7 +15,7 @@ interface UseSessionVerificationReturn {
 }
 
 /**
- * Custom hook for verifying session_id cookie presence
+ * Custom hook for verifying JWT token presence
  * @param options Configuration options for session verification
  * @returns Object containing session verification state and methods
  */
@@ -29,7 +29,8 @@ export const useSessionVerification = (
   const [isChecking, setIsChecking] = useState<boolean>(true);
 
   const verifySession = (): boolean => {
-    const isValid = verifySessionCookie();
+    const jwtToken = getJwtToken();
+    const isValid = !!jwtToken;
     setIsSessionValid(isValid);
     return isValid;
   };
@@ -51,7 +52,7 @@ export const useSessionVerification = (
       setIsChecking(false);
     };
 
-    // Add a small delay to ensure cookies are available
+    // Add a small delay to ensure tokens are available
     const timer = setTimeout(checkSession, 100);
     
     return () => clearTimeout(timer);

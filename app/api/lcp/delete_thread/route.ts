@@ -16,48 +16,39 @@ export async function POST(request: Request) {
     }
 
     // Get session using getServerSession with authOptions
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
     
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
-        { status: 401 }
-      );
-    }
-
-    // Extract session_id from request cookies
-    const cookieHeader = request.headers.get('cookie');
-    const sessionId = cookieHeader?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
-    if (!sessionId) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Session ID is required' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
 
     // First, delete all conversations with the given conversation_id
-    const url = `${config.API_URL}/db/delete`;
+    const url = `${config.API_URL}/api/db/delete`;
     const conversationsResponse = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `session_id=${sessionId}`,
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Conversations',
+        collection_name: 'Conversations',
         key_name: 'conversation_id',
         key_value: conversation_id,
-        index_name: 'conversation_id-index',
         account_id: session.user.id
-      }),
-      credentials: 'include',
+      })
     });
 
     if (!conversationsResponse.ok) {
-      const errorText = await conversationsResponse.text();
+      let errorText;
+      try {
+        const data = await conversationsResponse.json();
+        errorText = data?.error?.message || data?.message || JSON.stringify(data);
+      } catch (e) {
+        errorText = 'Unable to read error response';
+      }
       console.error('[delete_thread] Failed to delete conversations:', {
         status: conversationsResponse.status,
         statusText: conversationsResponse.statusText,
@@ -81,20 +72,24 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `session_id=${sessionId}`,
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Threads',
+        collection_name: 'Threads',
         key_name: 'conversation_id',
         key_value: conversation_id,
-        index_name: 'conversation_id-index',
         account_id: session.user.id
-      }),
-      credentials: 'include',
+      })
     });
 
     if (!threadResponse.ok) {
-      const errorText = await threadResponse.text();
+      let errorText;
+      try {
+        const data = await threadResponse.json();
+        errorText = data?.error?.message || data?.message || JSON.stringify(data);
+      } catch (e) {
+        errorText = 'Unable to read error response';
+      }
       console.error('[delete_thread] Failed to delete thread:', {
         status: threadResponse.status,
         statusText: threadResponse.statusText,

@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import type { Session } from 'next-auth';
 import type { Thread, Message, Conversation } from '@/types/conversation';
@@ -34,7 +34,7 @@ interface DashboardFilters {
 }
 
 export const useDashboard = () => {
-    const { data: session, status } = useSession() as { data: Session & { user: { id: string } } | null, status: string };
+    const { session, user, isAuthenticated, isLoading: authLoading } = useAuth();
     const router = useRouter();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [loadingConversations, setLoadingConversations] = useState(false);
@@ -59,7 +59,7 @@ export const useDashboard = () => {
 
     // Load threads - primarily used for manual refresh button
     const loadThreads = useCallback(async () => {
-        if (!session?.user?.id || loadingConversations) {
+        if (!user?.id || loadingConversations) {
             return;
         }
         setLoadingConversations(true);
@@ -67,7 +67,7 @@ export const useDashboard = () => {
         try {
             const response = await apiClient.request('/lcp/get_all_threads', {
                 method: 'POST',
-                body: { userId: session.user.id },
+                body: { userId: user.id },
             });
             
             if (!response.success || !response.data) {
@@ -88,10 +88,10 @@ export const useDashboard = () => {
             setLoadingConversations(false);
             setLoadingLeadPerformance(false);
         }
-    }, [session?.user?.id, timeRange]);
+    }, [user?.id, timeRange]);
 
     const markAsRead = useCallback(async (conversationId: string) => {
-        if (!session?.user?.id) return;
+        if (!user?.id) return;
         setUpdatingRead(conversationId);
         try {
             const response = await apiClient.dbUpdate({
@@ -115,10 +115,10 @@ export const useDashboard = () => {
         } finally {
             setUpdatingRead(null);
         }
-    }, [session?.user?.id]);
+    }, [user?.id]);
 
     const toggleLeadConversion = useCallback(async (conversationId: string) => {
-        if (!session?.user?.id) return;
+        if (!user?.id) return;
         const currentStatus = conversations.find(c => c.thread.conversation_id === conversationId)?.thread.lcp_enabled || false;
         setUpdatingLcp(conversationId);
         try {
@@ -143,10 +143,10 @@ export const useDashboard = () => {
         } finally {
             setUpdatingLcp(null);
         }
-    }, [session?.user?.id]);
+    }, [user?.id]);
 
     const deleteThread = useCallback(async (conversationId: string) => {
-        if (!session?.user?.id) return;
+        if (!user?.id) return;
         setDeletingThread(conversationId);
         try {
             const response = await apiClient.deleteThread(conversationId);
@@ -160,7 +160,7 @@ export const useDashboard = () => {
         } finally {
             setDeletingThread(null);
         }
-    }, [session?.user?.id]);
+    }, [user?.id]);
 
     const handleMarkAsNotSpam = async (conversationId: string) => {
         setUpdatingSpam(conversationId);
@@ -191,12 +191,12 @@ export const useDashboard = () => {
     }, [threadToDelete, deleteThread]);
 
     const refreshLeadPerformance = useCallback(async () => {
-        if (!session?.user?.id) return;
+        if (!user?.id) return;
         setRefreshingLeadPerformance(true);
         try {
             const response = await apiClient.request('/lcp/get_all_threads', {
                 method: 'POST',
-                body: { userId: session.user.id },
+                body: { userId: user.id },
             });
             if (!response.success || !response.data) {
                 throw new Error('Failed to refresh lead performance');
@@ -211,7 +211,7 @@ export const useDashboard = () => {
         } finally {
             setRefreshingLeadPerformance(false);
         }
-    }, [session]);
+    }, [user?.id]);
 
     const toggleFilter = (filter: keyof DashboardFilters) => {
         setFilters((prev: DashboardFilters) => ({ ...prev, [filter]: !prev[filter] }));
@@ -251,7 +251,7 @@ export const useDashboard = () => {
 
     return {
         session,
-        status,
+        status: authLoading,
         conversations,
         loadingConversations,
         updatingLcp,

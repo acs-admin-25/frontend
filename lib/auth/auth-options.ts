@@ -35,20 +35,23 @@ export const authOptions = {
           const data = response.data;
 
           const user: User = {
-            id: data.user?.id || data.id || '',
+            id: data.user?.id || data.data?.user?.id || '',
             email: creds.email,
-            name: data.user?.name || data.name || creds.name || '',
+            name: data.user?.name || data.data?.user?.name || creds.name || '',
             provider: creds.provider,
-            authType: data.authType || data.user?.authType || 'existing',
+            authType: data.authType || data.data?.authType || 'existing',
           };
           
-          if (creds.provider === 'google' && data.accessToken) {
+          // Handle JWT token for GCP
+          if (data.session?.token || data.data?.session?.token) {
+            user.accessToken = data.session?.token || data.data?.session?.token;
+          } else if (creds.provider === 'google' && data.accessToken) {
             user.accessToken = data.accessToken;
           }
 
-          // Extract session_id from the response if available
-          if (data.sessionId) {
-            (user as any).sessionId = data.sessionId;
+          // Extract session token for GCP
+          if (data.session?.token || data.data?.session?.token) {
+            (user as any).sessionToken = data.session?.token || data.data?.session?.token;
           }
 
           return user;
@@ -92,13 +95,19 @@ export const authOptions = {
 
           if (loginResponse.success && loginResponse.data) {
             // User exists, set authType and return true
-            appUser.authType = loginResponse.data.user?.authType || loginResponse.data.authType || 'existing';
-            appUser.id = loginResponse.data.user?.id || loginResponse.data.user?.id || '';
-            appUser.accessToken = account.access_token;
+            appUser.authType = loginResponse.data.user?.authType || loginResponse.data.data?.authType || 'existing';
+            appUser.id = loginResponse.data.user?.id || loginResponse.data.data?.user?.id || '';
             
-            // Extract session_id from the response if available
-            if (loginResponse.data.sessionId) {
-              (appUser as any).sessionId = loginResponse.data.sessionId;
+            // Handle JWT token for GCP
+            if (loginResponse.data.session?.token || loginResponse.data.data?.session?.token) {
+              appUser.accessToken = loginResponse.data.session?.token || loginResponse.data.data?.session?.token;
+            } else {
+              appUser.accessToken = account.access_token;
+            }
+            
+            // Extract session token for GCP
+            if (loginResponse.data.session?.token || loginResponse.data.data?.session?.token) {
+              (appUser as any).sessionToken = loginResponse.data.session?.token || loginResponse.data.data?.session?.token;
             }
             
             return true;
@@ -119,12 +128,17 @@ export const authOptions = {
           
           if (signupResponse.success && signupResponse.data) {
             // Signup successful
-            appUser.authType = signupResponse.data.user?.authType || 'new';
-            appUser.id = signupResponse.data.user?.id || '';
+            appUser.authType = signupResponse.data.user?.authType || signupResponse.data.data?.authType || 'new';
+            appUser.id = signupResponse.data.user?.id || signupResponse.data.data?.user?.id || '';
             
-            // Extract session_id from the response if available
-            if (signupResponse.data.sessionId) {
-              (appUser as any).sessionId = signupResponse.data.sessionId;
+            // Handle JWT token for GCP
+            if (signupResponse.data.session?.token || signupResponse.data.data?.session?.token) {
+              appUser.accessToken = signupResponse.data.session?.token || signupResponse.data.data?.session?.token;
+            }
+            
+            // Extract session token for GCP
+            if (signupResponse.data.session?.token || signupResponse.data.data?.session?.token) {
+              (appUser as any).sessionToken = signupResponse.data.session?.token || signupResponse.data.data?.session?.token;
             }
             
             return true;
@@ -133,13 +147,19 @@ export const authOptions = {
             console.log('User already exists, retrying login...');
             const retryLoginResponse = await serverApiClient.login(loginData);
             if (retryLoginResponse.success && retryLoginResponse.data) {
-              appUser.authType = retryLoginResponse.data.user?.authType || retryLoginResponse.data.authType || 'existing';
-              appUser.id = retryLoginResponse.data.user?.id || retryLoginResponse.data.user?.id || '';
-              appUser.accessToken = account.access_token;
+              appUser.authType = retryLoginResponse.data.user?.authType || retryLoginResponse.data.data?.authType || 'existing';
+              appUser.id = retryLoginResponse.data.user?.id || retryLoginResponse.data.data?.user?.id || '';
               
-              // Extract session_id from the response if available
-              if (retryLoginResponse.data.sessionId) {
-                (appUser as any).sessionId = retryLoginResponse.data.sessionId;
+              // Handle JWT token for GCP
+              if (retryLoginResponse.data.session?.token || retryLoginResponse.data.data?.session?.token) {
+                appUser.accessToken = retryLoginResponse.data.session?.token || retryLoginResponse.data.data?.session?.token;
+              } else {
+                appUser.accessToken = account.access_token;
+              }
+              
+              // Extract session token for GCP
+              if (retryLoginResponse.data.session?.token || retryLoginResponse.data.data?.session?.token) {
+                (appUser as any).sessionToken = retryLoginResponse.data.session?.token || retryLoginResponse.data.data?.session?.token;
               }
               
               return true;
@@ -174,9 +194,9 @@ export const authOptions = {
             if (appUser.accessToken) {
                 token.accessToken = appUser.accessToken;
             }
-            // Preserve sessionId from user object if it exists
-            if ((appUser as any).sessionId) {
-                token.sessionId = (appUser as any).sessionId;
+            // Preserve session token for GCP
+            if ((appUser as any).sessionToken) {
+                token.sessionToken = (appUser as any).sessionToken;
             }
         }
         return token;
@@ -190,9 +210,9 @@ export const authOptions = {
             session.user.provider = token.provider;
             session.user.authType = token.authType;
             session.user.accessToken = token.accessToken;
-            // Pass through sessionId to the session
-            if (token.sessionId) {
-                (session as any).sessionId = token.sessionId;
+            // Pass through session token for GCP
+            if (token.sessionToken) {
+                (session as any).sessionToken = token.sessionToken;
             }
         }
         return session;

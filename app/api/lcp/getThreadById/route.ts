@@ -9,10 +9,10 @@ export async function POST(request: Request) {
     const { conversation_id } = await request.json();
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
@@ -24,31 +24,33 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
     // First, get the specific thread
-    const threadResponse = await fetch(`${config.API_URL}/db/select`, {
+    const threadResponse = await fetch(`${config.API_URL}/api/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Threads',
-        index_name: 'conversation_id-index',
+        collection_name: 'Threads',
         key_name: 'conversation_id',
         key_value: conversation_id,
-        account_id: session.user.id
-      }),
-      credentials: 'include',
+        account_id: session.user.id,
+        filters: {},
+        limit: 1,
+        order_by: 'created_at',
+        order_direction: 'desc'
+      })
     });
 
     if (!threadResponse.ok) {
-      const errorText = await threadResponse.text();
+      let errorText;
+      try {
+        const data = await threadResponse.json();
+        errorText = data?.error?.message || data?.message || JSON.stringify(data);
+      } catch (e) {
+        errorText = 'Unable to read error response';
+      }
       console.error('[getThreadById] Failed to fetch thread:', {
         status: threadResponse.status,
         statusText: threadResponse.statusText,
@@ -77,24 +79,32 @@ export async function POST(request: Request) {
     }
 
     // Fetch the associated messages for this thread
-    const messagesResponse = await fetch(`${config.API_URL}/db/select`, {
+    const messagesResponse = await fetch(`${config.API_URL}/api/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Conversations',
-        index_name: 'conversation_id-index',
+        collection_name: 'Conversations',
         key_name: 'conversation_id',
         key_value: conversation_id,
-        account_id: session.user.id
-      }),
-      credentials: 'include',
+        account_id: session.user.id,
+        filters: {},
+        limit: 1000,
+        order_by: 'timestamp',
+        order_direction: 'desc'
+      })
     });
 
     if (!messagesResponse.ok) {
-      const errorText = await messagesResponse.text();
+      let errorText;
+      try {
+        const data = await messagesResponse.json();
+        errorText = data?.error?.message || data?.message || JSON.stringify(data);
+      } catch (e) {
+        errorText = 'Unable to read error response';
+      }
       console.error('[getThreadById] Failed to fetch messages:', {
         status: messagesResponse.status,
         statusText: messagesResponse.statusText,

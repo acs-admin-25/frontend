@@ -8,11 +8,10 @@
 
 "use client"
 
-import React, { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, ArrowRight, UserPlus, LogIn, Lock, Info, CheckCircle, AlertTriangle } from 'lucide-react'
-import { useApi } from '@/lib/hooks/useApi'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'
@@ -45,20 +44,15 @@ const DemoPage = () => {
   const router = useRouter()
   const [demoCode, setDemoCode] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const [verify, setVerify] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
   const [verificationCompleted, setVerificationCompleted] = useState(false)
-
-  const { data, loading, error, refetch } = useApi<any>('verify-demo', {
-    method: 'POST',
-    body: { demoCode },
-    enabled: verify,
-    onSuccess: () => {
-      setVerificationCompleted(true)
-    }
-  })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setDemoCode(e.target.value)
+    // Clear error when user starts typing
+    if (error) setError(null)
   }
 
   const togglePasswordVisibility = () => {
@@ -66,20 +60,45 @@ const DemoPage = () => {
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setVerify(true);
+    e.preventDefault()
+    
+    if (!demoCode.trim()) {
+      setError('Demo code is required')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+    setSuccess(false)
+
+    try {
+      const response = await fetch('/api/verify-demo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ demoCode: demoCode.trim() }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        setSuccess(true)
+        setVerificationCompleted(true)
+      } else {
+        setError(data.error || 'Failed to verify demo code')
+      }
+    } catch (err) {
+      console.error('Demo verification error:', err)
+      setError('Failed to fetch')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleNavigation = (route: string) => {
     router.push(route)
   }
-
-  useEffect(() => {
-      if(verify) {
-          refetch();
-          setVerify(false);
-      }
-  }, [verify, refetch]);
 
   return (
       <div className="min-h-screen bg-gradient-to-br from-accent/50 to-accent flex flex-col w-full h-full">
@@ -129,7 +148,7 @@ const DemoPage = () => {
               </div>
 
               {/* Success Message */}
-              {data?.success && (
+              {success && (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -159,7 +178,7 @@ const DemoPage = () => {
               )}
 
               {/* Navigation Options - Show after successful verification */}
-              {verificationCompleted && data?.success && (
+              {verificationCompleted && success && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}

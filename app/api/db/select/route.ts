@@ -44,7 +44,7 @@ export async function POST(request: Request) {
     };
 
     // Make the request to the GCP API Gateway
-    const response = await fetch(`${config.API_URL}/db/select`, {
+    const response = await fetch(`${config.API_URL}/api/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
         status: response.status,
         statusText: response.statusText,
         error: responseText,
-        url: `${config.API_URL}/db/select`,
+        url: `${config.API_URL}/api/db/select`,
         requestBody: {
           collection_name: table_name,
           key_name,

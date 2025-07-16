@@ -14,6 +14,7 @@ import { conversationStorage } from '@/lib/utils/ConversationStorage';
 import { checkForNewEmailsShared, processThreadsResponse } from '@/lib/utils/api';
 import type { Conversation } from '@/types/conversation';
 import type { ThreadUpdate } from '@/types/api';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface UseOptimisticConversationsOptions {
   autoRefresh?: boolean;
@@ -52,10 +53,7 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
     checkNewEmails = true,
   } = options;
 
-  const { data: session, status } = useSession() as { 
-    data: (Session & { user: { id: string } }) | null; 
-    status: 'loading' | 'authenticated' | 'unauthenticated';
-  };
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,23 +64,23 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
 
   // Initialize API client and storage when user is authenticated
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.id && !isInitialized) {
-      apiClient.initialize(session.user.id);
+    if (isAuthenticated && user?.id && !isInitialized) {
+      apiClient.initialize(user.id);
       setIsInitialized(true);
     }
-  }, [status, session?.user?.id, isInitialized]);
+  }, [isAuthenticated, user?.id, isInitialized]);
 
   // Load conversations from storage or API
   const loadConversations = useCallback(async (forceRefresh = false) => {
-    if (!session?.user?.id) {
+    if (!user?.id) {
       console.log('[useOptimisticConversations] No session user ID, skipping load');
       return;
     }
 
     console.log('[useOptimisticConversations] Loading conversations:', {
       forceRefresh,
-      hasSession: !!session,
-      userId: session.user.id,
+      hasSession: !!user,
+      userId: user.id,
       hasCachedData: conversationStorage.hasData(),
       isStale: conversationStorage.isStale(10)
     });
@@ -179,16 +177,16 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id]);
+  }, [user?.id]);
 
   // Check for new emails
   const checkForNewEmails = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!user?.id) return;
     
-    await checkForNewEmailsShared(session.user.id, async () => {
+    await checkForNewEmailsShared(user.id, async () => {
       await loadConversations(true);
     });
-  }, [session?.user?.id, loadConversations]);
+  }, [user?.id, loadConversations]);
 
   // Initial load
   useEffect(() => {

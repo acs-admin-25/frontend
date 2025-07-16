@@ -9,10 +9,10 @@ export async function POST(request: Request) {
     const { conversation_id, message_id, account_id } = await request.json();
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
@@ -25,12 +25,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
     if (!conversation_id || !message_id || !account_id) {
         return NextResponse.json(
         { error: 'Conversation ID, Response ID, and Account ID are required' },
@@ -41,15 +35,14 @@ export async function POST(request: Request) {
     // Update both Threads and Conversations tables
     const updatePromises = [
       // Update Threads table
-      fetch(`${config.API_URL}/db/update`, {
+      fetch(`${config.API_URL}/api/db/update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+          'Authorization': `Bearer ${session.user.accessToken}`
         },
         body: JSON.stringify({
-          table_name: 'Threads',
-          index_name: 'conversation_id-index',
+          collection_name: 'Threads',
           key_name: 'conversation_id',
           key_value: conversation_id,
           update_data: {
@@ -57,19 +50,17 @@ export async function POST(request: Request) {
             ttl: Math.floor(Date.now() / 1000) + (1000 * 365 * 24 * 60 * 60) // 1000 years from now in Unix timestamp
           },
           account_id: account_id
-        }),
-        credentials: 'include',
+        })
       }),
       // Update Conversations table
-      fetch(`${config.API_URL}/db/update`, {
+      fetch(`${config.API_URL}/api/db/update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+          'Authorization': `Bearer ${session.user.accessToken}`
         },
         body: JSON.stringify({
-          table_name: 'Conversations',
-          index_name: 'conversation_id-index',
+          collection_name: 'Conversations',
           key_name: 'conversation_id',
           key_value: conversation_id,
           update_data: {
@@ -77,8 +68,7 @@ export async function POST(request: Request) {
             ttl: Math.floor(Date.now() / 1000) + (1000 * 365 * 24 * 60 * 60) // 1000 years from now in Unix timestamp
           },
           account_id: account_id
-        }),
-        credentials: 'include',
+        })
       })
     ];
 
@@ -89,7 +79,13 @@ export async function POST(request: Request) {
     if (!threadsResponse.ok || !conversationsResponse.ok) {
       const errors = [];
       if (!threadsResponse.ok) {
-        const errorText = await threadsResponse.text();
+        let errorText;
+        try {
+          const data = await threadsResponse.json();
+          errorText = data?.error?.message || data?.message || JSON.stringify(data);
+        } catch (e) {
+          errorText = 'Unable to read error response';
+        }
         console.error('[mark_not_spam] Threads update failed:', {
           status: threadsResponse.status,
           error: errorText
@@ -106,7 +102,13 @@ export async function POST(request: Request) {
         errors.push(`Threads update failed: ${errorText}`);
       }
       if (!conversationsResponse.ok) {
-        const errorText = await conversationsResponse.text();
+        let errorText;
+        try {
+          const data = await conversationsResponse.json();
+          errorText = data?.error?.message || data?.message || JSON.stringify(data);
+        } catch (e) {
+          errorText = 'Unable to read error response';
+        }
         console.error('[mark_not_spam] Conversations update failed:', {
           status: conversationsResponse.status,
           error: errorText
@@ -128,22 +130,26 @@ export async function POST(request: Request) {
 
     // Generate EV for the thread
     try {
-      const evResponse = await fetch(`${config.API_URL}/lcp/generate-ev`, {
+      const evResponse = await fetch(`${config.API_URL}/api/lcp/generate-ev`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+          'Authorization': `Bearer ${session.user.accessToken}`
         },
         body: JSON.stringify({
           conversation_id,
           response_id: message_id,
           account_id
-        }),
-        credentials: 'include',
+        })
       });   
 
       if (!evResponse.ok) {
-        const errorData = await evResponse.json();
+        let errorData;
+        try {
+          errorData = await evResponse.json();
+        } catch (e) {
+          errorData = { message: 'Unable to read error response' };
+        }
         console.warn('[mark_not_spam] EV generation failed, but spam status was updated successfully:', {
           status: evResponse.status,
           error: errorData

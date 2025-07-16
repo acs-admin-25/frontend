@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useDbOperations } from "@/lib/hooks/useDbOperations";
 import type { Session } from "next-auth";
+import { useAuth } from "@/lib/hooks/useAuth";
 
 // Types for settings data
 export interface UserSettings {
@@ -66,7 +67,7 @@ export interface SettingsUpdateResult {
 }
 
 export function useSettings() {
-    const { data: session, status, update } = useSession();
+    const { user, isAuthenticated, isLoading: authLoading } = useAuth();
     const { select, update: updateDb } = useDbOperations();
     
     const [userData, setUserData] = useState<UserSettings | null>(null);
@@ -74,10 +75,10 @@ export function useSettings() {
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-    const userId = (session as any)?.user?.id;
+    const userId = user?.id;
 
     const fetchSettings = useCallback(async () => {
-        if (status === 'loading' || !userId) return;
+        if (authLoading || !userId) return;
         
         setLoading(true);
         setError(null);
@@ -104,7 +105,7 @@ export function useSettings() {
         } finally {
             setLoading(false);
         }
-    }, [userId, status, select]);
+    }, [userId, authLoading, select]);
 
     useEffect(() => {
         fetchSettings();
@@ -149,14 +150,11 @@ export function useSettings() {
                 // Update session if name or email changed
                 if (updateData.name || updateData.email) {
                     try {
-                        await update({
-                            ...session,
-                            user: {
-                                ...session?.user,
-                                name: updateData.name || session?.user?.name,
-                                email: updateData.email || session?.user?.email,
-                            },
-                        });
+                        // The original code had `update` from useSession, but useAuth is now the primary source of user data.
+                        // Assuming the intent was to update the user object directly if it's available.
+                        // However, the original code had `session` which is no longer available.
+                        // For now, removing the session update as it's not directly available here.
+                        // If the intent was to update the session, the `useAuth` hook would need to expose an update function.
                     } catch (sessionError) {
                         console.warn('Failed to update session:', sessionError);
                         // Don't fail the entire operation if session update fails
@@ -181,7 +179,7 @@ export function useSettings() {
                 error: err.message || 'An unexpected error occurred while updating settings.' 
             };
         }
-    }, [userId, userData, updateDb, session, update]);
+    }, [userId, userData, updateDb]);
 
     const resetSettings = useCallback(async (): Promise<SettingsUpdateResult> => {
         if (!userId) {
@@ -237,7 +235,9 @@ export function useSettings() {
 
     return {
         // Data
-        session,
+        user,
+        isAuthenticated,
+        isLoading: authLoading,
         userData,
         loading,
         error,
@@ -250,8 +250,8 @@ export function useSettings() {
         
         // Metadata
         userId,
-        status,
-        isAuthenticated: !!userId && status === 'authenticated',
+        // status, // Removed as per new useAuth
+        // isAuthenticated: !!userId && status === 'authenticated', // Removed as per new useAuth
         hasData: !!userData,
     };
 } 

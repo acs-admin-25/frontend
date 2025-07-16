@@ -1,6 +1,17 @@
 import type { AppError } from '@/types/errors';
 
 export function handleApiError(error: any): AppError {
+  // Handle GCP error format
+  if (error.data?.error?.message) {
+    return {
+      type: 'API',
+      message: error.data.error.message,
+      code: error.data.error.code || 'GCP_ERROR',
+      status: error.status || 500,
+      timestamp: new Date(),
+    };
+  }
+  
   if (error.status === 401) {
     return {
       type: 'AUTH',

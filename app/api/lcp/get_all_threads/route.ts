@@ -37,16 +37,17 @@ export async function POST(request: Request) {
     const { userId } = requestBody;
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
     console.log('[get_all_threads] Session info:', {
       hasSession: !!session,
       hasUser: !!session?.user,
-      userId: session?.user?.id
+      userId: session?.user?.id,
+      hasAccessToken: !!session?.user?.accessToken
     });
     
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
@@ -59,18 +60,6 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
-
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
-    console.log('[get_all_threads] Configuration:', {
-      API_URL: config.API_URL,
-      hasSessionId: !!sessionId,
-      actualUserId
-    });
 
     // If API_URL is not configured, return mock data for testing
     if (!config.API_URL) {
@@ -118,39 +107,44 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get all threads for the user
-    const threadsResponse = await fetch(`${config.API_URL}/db/select`, {
+    // Get all threads for the user from GCP backend using JWT
+    const threadsResponse = await fetch(`${config.API_URL}/api/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `session_id=${sessionId}`
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Threads',
-        index_name: 'associated_account-index',
+        collection_name: 'Threads',
         key_name: 'associated_account',
         key_value: actualUserId,
         account_id: actualUserId,
-        session_id: sessionId
+        filters: {},
+        limit: 100,
+        order_by: 'created_at',
+        order_direction: 'desc'
       })
     });
 
     console.log('[get_all_threads] Threads request details:', {
-      url: `${config.API_URL}/db/select`,
+      url: `${config.API_URL}/api/db/select`,
       body: {
-        table_name: 'Threads',
-        index_name: 'associated_account-index',
+        collection_name: 'Threads',
         key_name: 'associated_account',
         key_value: actualUserId,
         account_id: actualUserId,
-        session_id: sessionId
+        filters: {},
+        limit: 100,
+        order_by: 'created_at',
+        order_direction: 'desc'
       }
     });
 
     if (!threadsResponse.ok) {
       let errorText: string;
       try {
-        errorText = await threadsResponse.text();
+        const data = await threadsResponse.json();
+        errorText = data?.error?.message || data?.message || JSON.stringify(data);
       } catch (textError) {
         errorText = 'Unable to read error response';
       }
@@ -159,14 +153,16 @@ export async function POST(request: Request) {
         status: threadsResponse.status,
         statusText: threadsResponse.statusText,
         error: errorText,
-        requestUrl: `${config.API_URL}/db/select`,
+        requestUrl: `${config.API_URL}/api/db/select`,
         requestBody: {
-          table_name: 'Threads',
-          index_name: 'associated_account-index',
+          collection_name: 'Threads',
           key_name: 'associated_account',
           key_value: actualUserId,
           account_id: actualUserId,
-          session_id: sessionId
+          filters: {},
+          limit: 100,
+          order_by: 'created_at',
+          order_direction: 'desc'
         }
       });
       
@@ -244,19 +240,21 @@ export async function POST(request: Request) {
     }
 
     // Get all messages for these conversations
-    const messagesResponse = await fetch(`${config.API_URL}/db/batch-select`, {
+    const messagesResponse = await fetch(`${config.API_URL}/api/db/batch-select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `session_id=${sessionId}`
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({
-        table_name: 'Conversations',
-        index_name: 'conversation_id-index',
+        collection_name: 'Conversations',
         key_name: 'conversation_id',
         key_values: conversationIds,
         account_id: actualUserId,
-        session_id: sessionId
+        filters: {},
+        limit: 1000,
+        order_by: 'timestamp',
+        order_direction: 'desc'
       })
     });
 
@@ -272,14 +270,16 @@ export async function POST(request: Request) {
         status: messagesResponse.status,
         statusText: messagesResponse.statusText,
         error: errorText,
-        requestUrl: `${config.API_URL}/db/batch-select`,
+        requestUrl: `${config.API_URL}/api/db/batch-select`,
         requestBody: {
-          table_name: 'Conversations',
-          index_name: 'conversation_id-index',
+          collection_name: 'Conversations',
           key_name: 'conversation_id',
           key_values: conversationIds,
           account_id: actualUserId,
-          session_id: sessionId
+          filters: {},
+          limit: 1000,
+          order_by: 'timestamp',
+          order_direction: 'desc'
         }
       });
       

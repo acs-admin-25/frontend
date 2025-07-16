@@ -7,7 +7,7 @@ import { Session } from 'next-auth';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { table_name, attribute_name, attribute_value, is_primary_key } = body;
+    const { collection_name, key_name, key_values, filters, limit, order_by, order_direction } = body;
 
     // Get session using getServerSession with authOptions
     const session = await getServerSession(authOptions) as Session & { 
@@ -23,24 +23,34 @@ export async function POST(request: Request) {
     }
 
     // Validate required parameters
-    if (!table_name || !attribute_name || attribute_value === undefined) {
-      console.error('[db/delete] Missing required parameters:', { table_name, attribute_name, attribute_value });
+    if (!collection_name || !key_values || !Array.isArray(key_values)) {
+      console.error('[db/batch-select] Missing required parameters:', { collection_name, key_values });
       return NextResponse.json(
-        { error: 'Missing required parameters' },
+        { error: 'Missing required parameters: collection_name and key_values array' },
         { status: 400 }
       );
     }
 
-    // Convert to GCP Firestore format
+    // Convert to GCP batch select format
+    const queries = key_values.map(key_value => ({
+      collection_name,
+      key_name,
+      key_value,
+      account_id: session.user.id,
+      filters: filters || {},
+      limit: limit || 100,
+      order_by: order_by || 'created_at',
+      order_direction: order_direction || 'desc'
+    }));
+
     const gcpParams = {
-      collection_name: table_name,
-      key_name: attribute_name,
-      key_value: attribute_value,
-      account_id: session.user.id
+      queries,
+      account_id: session.user.id,
+      max_parallel: 10
     };
 
     // Make the request to the GCP API Gateway
-    const response = await fetch(`${config.API_URL}/api/db/delete`, {
+    const response = await fetch(`${config.API_URL}/api/db/batch-select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -53,15 +63,14 @@ export async function POST(request: Request) {
     const responseText = await response.text();
     
     if (!response.ok) {
-      console.error('[db/delete] Response not ok:', {
+      console.error('[db/batch-select] Response not ok:', {
         status: response.status,
         statusText: response.statusText,
         error: responseText,
-        url: `${config.API_URL}/api/db/delete`,
+        url: `${config.API_URL}/api/db/batch-select`,
         requestBody: {
-          collection_name: table_name,
-          key_name: attribute_name,
-          key_value: typeof attribute_value === 'string' ? attribute_value.substring(0, 10) + '...' : attribute_value
+          queries: queries.length,
+          account_id: session.user.id
         }
       });
       
@@ -79,7 +88,7 @@ export async function POST(request: Request) {
       
       return NextResponse.json(
         { 
-          error: 'Database deletion failed',
+          error: 'Batch database query failed',
           details: responseText,
           status: response.status
         },
@@ -92,7 +101,7 @@ export async function POST(request: Request) {
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('[db/delete] Failed to parse response:', parseError);
+      console.error('[db/batch-select] Failed to parse response:', parseError);
       return NextResponse.json(
         { error: 'Invalid JSON response from database' },
         { status: 500 }
@@ -101,30 +110,41 @@ export async function POST(request: Request) {
 
     // Handle the GCP response format
     if (!data.success) {
-      console.error('[db/delete] GCP API returned error:', data);
+      console.error('[db/batch-select] GCP API returned error:', data);
       return NextResponse.json(
-        { error: data.error || 'Database deletion failed' },
+        { error: data.error || 'Batch database query failed' },
         { status: 500 }
       );
     }
 
-    // Return the deletion result from the GCP response
+    // Flatten results from all queries into a single array
+    const allItems = data.data?.results?.flatMap((result: any) => 
+      result.success ? result.data : []
+    ) || [];
+
+    // Return the items from the GCP response
     return NextResponse.json({
       success: true,
-      deleted: data.data?.deleted_count || 0
+      items: allItems,
+      total_count: allItems.length,
+      batch_stats: {
+        total_queries: data.data?.total_queries || 0,
+        successful_queries: data.data?.successful_queries || 0,
+        failed_queries: data.data?.failed_queries || 0
+      }
     });
 
   } catch (error) {
-    console.error('[db/delete] Unexpected error:', {
+    console.error('[db/batch-select] Unexpected error:', {
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined
     });
     return NextResponse.json(
       { 
-        error: 'Internal server error from db/delete route',
+        error: 'Internal server error from db/batch-select route',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
   }
-}
+} 

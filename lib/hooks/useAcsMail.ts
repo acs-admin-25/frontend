@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { useDbOperations } from '@/lib/hooks/useDbOperations';
 
 export function useAcsMail() {
-  const { data: session, status } = useSession();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { select } = useDbOperations();
-  const userId = (session as any)?.user?.id;
+  const userId = user?.id;
 
   const [acsMail, setAcsMail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!userId || status !== 'authenticated') return;
+    if (!userId || !isAuthenticated || authLoading) return;
     setLoading(true);
     setError(null);
     select({
@@ -34,7 +34,7 @@ export function useAcsMail() {
         setAcsMail(null);
       })
       .finally(() => setLoading(false));
-  }, [userId, status, select]);
+  }, [userId, isAuthenticated, authLoading, select]);
 
   return { acsMail, loading, error };
 } 

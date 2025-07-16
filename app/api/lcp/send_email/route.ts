@@ -9,10 +9,10 @@ export async function POST(request: Request) {
     const { conversation_id, response_body } = await request.json();
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
@@ -28,33 +28,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get session_id from request cookies
-    const cookies = request.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
     // one thing we have to do is update the thread to set 'busy' to true 
-    const url = `${config.API_URL}/db/update`;
+    const url = `${config.API_URL}/api/db/update`;
     const updateResponse = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({ 
-        table_name: 'Threads',
+        collection_name: 'Threads',
         key_name: 'conversation_id',
         key_value: conversation_id,
-        index_name: 'conversation_id-index',
         update_data: { busy: true },
         account_id: session.user.id
-      }),
-      credentials: 'include'
+      })
     });
 
     if (!updateResponse.ok) {
-      const errorText = await updateResponse.text();
+      let errorText;
+      try {
+        const data = await updateResponse.json();
+        errorText = data?.error?.message || data?.message || JSON.stringify(data);
+      } catch (e) {
+        errorText = 'Unable to read error response';
+      }
       console.error('[send_email] Failed to update thread:', {
         status: updateResponse.status,
         error: errorText
@@ -77,20 +75,17 @@ export async function POST(request: Request) {
       );
     }
 
-
     // Make request to the config API endpoint
-    const response = await fetch(`${config.API_URL}/lcp/send-email`, {
+    const response = await fetch(`${config.API_URL}/api/lcp/send-email`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
-      credentials: 'include',
       body: JSON.stringify({
         conversation_id,
         response_body,
-        account_id: session.user.id,
-        session_id: sessionId
+        account_id: session.user.id
       }),
     });
 

@@ -17,29 +17,22 @@ export async function POST(req: NextRequest) {
     }
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
-    if (!session?.user?.id) {
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; accessToken?: string } };
+    if (!session?.user?.id || !session?.user?.accessToken) {
       return NextResponse.json(
-        { error: 'Unauthorized - No authenticated user found' },
+        { error: 'Unauthorized - No authenticated user or token found' },
         { status: 401 }
       );
     }
 
-    // Get session_id from request cookies
-    const cookies = req.headers.get('cookie');
-    const sessionId = cookies?.split(';')
-      .find(cookie => cookie.trim().startsWith('session_id='))
-      ?.split('=')[1];
-
-    // Forward the request to the Lambda function
+    // Forward the request to the GCP backend
     const res = await fetch(`${config.API_URL}/users/domain/verify-dkim`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.accessToken}`
       },
       body: JSON.stringify({ domain }),
-      credentials: 'include',
     });
 
     const responseText = await res.text();

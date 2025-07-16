@@ -110,11 +110,75 @@ export class ApiClient {
   private getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {};
     
+    // Try to get JWT token from localStorage first (GCP)
+    if (typeof window !== 'undefined') {
+      const jwtToken = localStorage.getItem('gcp_jwt_token');
+      if (jwtToken) {
+        headers['Authorization'] = `Bearer ${jwtToken}`;
+        return headers;
+      }
+    }
+    
+    // Fallback to stored auth token
     if (this.authToken) {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
     
     return headers;
+  }
+
+  /**
+   * Refresh JWT token if needed
+   */
+  private async refreshTokenIfNeeded(): Promise<void> {
+    if (typeof window === 'undefined') return;
+    
+    const jwtToken = localStorage.getItem('gcp_jwt_token');
+    if (!jwtToken) return;
+    
+    try {
+      // Decode JWT token to check expiration
+      const payload = JSON.parse(atob(jwtToken.split('.')[1]));
+      const currentTime = Math.floor(Date.now() / 1000);
+      const timeUntilExpiry = payload.exp - currentTime;
+      
+      // Refresh token if it expires in less than 5 minutes
+      if (timeUntilExpiry < 300) {
+        console.log('[ApiClient] JWT token expiring soon, refreshing...');
+        await this.refreshJwtToken();
+      }
+    } catch (error) {
+      console.warn('[ApiClient] Failed to check JWT token expiration:', error);
+    }
+  }
+
+  /**
+   * Refresh JWT token
+   */
+  private async refreshJwtToken(): Promise<void> {
+    try {
+      const response = await fetch(`${this.baseURL}/auth/refresh-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...this.getAuthHeaders(),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newToken = data.data?.token || data.token;
+        if (newToken) {
+          localStorage.setItem('gcp_jwt_token', newToken);
+          this.setAuthToken(newToken);
+        }
+      }
+    } catch (error) {
+      console.error('[ApiClient] Failed to refresh JWT token:', error);
+      // Clear invalid token
+      localStorage.removeItem('gcp_jwt_token');
+      this.removeAuthToken();
+    }
   }
 
   async request<T>(
@@ -131,6 +195,9 @@ export class ApiClient {
         return cached.data;
       }
     }
+
+    // Refresh JWT token if needed before making request
+    await this.refreshTokenIfNeeded();
 
     let lastError: any = null;
     
@@ -458,9 +525,12 @@ export class ApiClient {
       body: credentials
     });
 
-    // Store the JWT token if login was successful
-    if (response.success && response.data?.session?.token) {
-      this.setAuthToken(response.data.session.token);
+    // Store the JWT token if login was successful (handle both GCP and legacy formats)
+    if (response.success) {
+      const token = response.data?.session?.token || response.data?.data?.session?.token;
+      if (token) {
+        this.setAuthToken(token);
+      }
     }
 
     return response;
@@ -472,9 +542,12 @@ export class ApiClient {
       body: userData
     });
 
-    // Store the JWT token if signup was successful
-    if (response.success && response.data?.session?.token) {
-      this.setAuthToken(response.data.session.token);
+    // Store the JWT token if signup was successful (handle both GCP and legacy formats)
+    if (response.success) {
+      const token = response.data?.session?.token || response.data?.data?.session?.token;
+      if (token) {
+        this.setAuthToken(token);
+      }
     }
 
     return response;

@@ -196,8 +196,15 @@ export class ApiClient {
       }
     }
 
-    // Refresh JWT token if needed before making request
-    await this.refreshTokenIfNeeded();
+    // Skip token refresh for authentication endpoints to prevent circular dependency
+    const isAuthEndpoint = endpoint.includes('/auth/login') || 
+                          endpoint.includes('/auth/signup') || 
+                          endpoint.includes('/auth/logout');
+    
+    // Only refresh JWT token if needed and not calling an auth endpoint
+    if (!isAuthEndpoint) {
+      await this.refreshTokenIfNeeded();
+    }
 
     let lastError: any = null;
     

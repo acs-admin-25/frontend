@@ -20,16 +20,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No active session found.' }, { status: 401 });
     }
 
+    // Extract session_id from request body
+    const requestBody = await request.json();
+    const session_id = requestBody.session_id;
+
+    if (!session_id) {
+      return NextResponse.json({ error: 'Session ID is required.' }, { status: 400 });
+    }
+
     // Call GCP API Gateway for logout
     const response = await fetch(`${config.API_URL}/api/auth/logout`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.user.accessToken || ''}`,
       },
       body: JSON.stringify({ 
-        userId: session.user.id,
-        provider: session.user.provider || 'form'
+        session_id: session_id,
+        user_id: session.user.id,
+        logout_all: requestBody.logout_all || false
       }),
     });
 

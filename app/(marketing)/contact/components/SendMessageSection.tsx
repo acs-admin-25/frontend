@@ -33,19 +33,12 @@ export function SendMessageSection({
     updateField,
     handleSubmit,
     resetForm,
-    handleDemoRequest,
   } = useSendMessage();
 
   // Handle form field changes
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLInputElement>) => {
     const { name, value, type } = e.target;
-    const checked = "checked" in e.target ? e.target.checked : false;
-    
-    if (name === "isDemoRequest") {
-      handleDemoRequest(checked);
-    } else {
-      updateField(name as keyof ContactMessageData, type === "checkbox" ? checked : value);
-    }
+    updateField(name as keyof ContactMessageData, type === "checkbox" ? ("checked" in e.target ? e.target.checked : false) : value);
   };
 
   // Handle form reset
@@ -151,19 +144,7 @@ export function SendMessageSection({
                   placeholder="Enter your message"
                 />
               </div>
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="isDemoRequest"
-                  name="isDemoRequest"
-                  className="h-4 w-4 rounded border-border text-primary focus:ring-ring"
-                  checked={formData.isDemoRequest}
-                  onChange={handleFormChange}
-                />
-                <label htmlFor="isDemoRequest" className="ml-2 block text-sm text-foreground">
-                  Request a demo
-                </label>
-              </div>
+              {/* Request a demo removed */}
               {apiError && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />

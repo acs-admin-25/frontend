@@ -1,4 +1,5 @@
 import { Home, Mail, Users, MessageSquare, BarChart3, Settings, Phone, Calendar, Trash2, CreditCard, FileText, Clock, Grid, UserCheck, MessageCircle, PieChart, Cog } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 
 export interface NavigationItem {
   title: string;
@@ -102,6 +103,12 @@ export const navigationGroups: NavigationGroup[] = [
         icon: FileText,
         url: "/dashboard/resources",
         description: "Help & Documentation"
+      },
+      {
+        title: "Support",
+        icon: HelpCircle,
+        url: "/dashboard/support",
+        description: "Support Center"
       },
       {
         title: "Junk",

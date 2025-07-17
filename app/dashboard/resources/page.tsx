@@ -10,9 +10,9 @@ import { securitySection } from "./security";
 import { troubleshootingSection } from "./troubleshooting";
 import { usageAnalyticsSection } from "./usage-analysis";
 import { faqSection } from "./faq";
-import { ResourceSection, ResourceItem } from '../../../types/resources';
+import { ResourceSection, ResourceItem } from '@/lib/types/resources';
 import { Search, BookOpen, Shield, Zap, BarChart3, Users, Mail, Calendar, Settings, HelpCircle, Star, TrendingUp, Lock, Eye, Clock, Target, MessageSquare, Phone, MapPin, FileText, CheckCircle, AlertCircle, Info, ArrowLeft, Home, Sparkles, Lightbulb, Award, Bookmark, ExternalLink, ChevronRight, Play, Pause, RotateCcw, Maximize2, Minimize2, ChevronDown, ChevronUp, X } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ErrorBoundary } from '@/components/common/Feedback/ErrorBoundary';
 import { Suspense } from 'react';
 import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
@@ -21,6 +21,8 @@ import { applyTheme, greenTheme } from "../../../lib/theme/simple-theme";
 
 function ResourcesContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState('getting-started');
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -178,6 +180,13 @@ function ResourcesContent() {
 
   const isSearching = searchQuery.trim().length > 0;
   const displayTabs = isSearching ? searchResults.tabs : tabs;
+
+  // Sync activeTab with tabParam from URL
+  React.useEffect(() => {
+    if (tabParam && tabs.some(tab => tab.id === tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   React.useEffect(() => {
     applyTheme(greenTheme);

@@ -18,82 +18,11 @@ import {
   Clock,
 } from "lucide-react"
 import { cn } from '@/lib/utils/utils'
+import { resourceItems } from '../cards/QuickResources'
+import Link from 'next/link'
 
 // Resource data combining both images
-const resources = [
-  {
-    id: 1,
-    title: "Getting Started Guide",
-    description: "Essential setup and navigation tips for new users",
-    readTime: "10 min",
-    priority: "high",
-    icon: <BookOpen className="h-6 w-6" />,
-    color: "green",
-  },
-  {
-    id: 2,
-    title: "Lead Conversion Best Practices",
-    description: "Proven strategies to improve your conversion rates",
-    readTime: "15 min",
-    priority: "high",
-    icon: <Target className="h-6 w-6" />,
-    color: "white",
-  },
-  {
-    id: 3,
-    title: "Advanced Features Guide",
-    description: "Master advanced ACS features and automation",
-    readTime: "25 min",
-    priority: "medium",
-    icon: <Zap className="h-6 w-6" />,
-    color: "green",
-  },
-  {
-    id: 4,
-    title: "Analytics Deep Dive",
-    description: "Understanding your performance metrics and trends",
-    readTime: "20 min",
-    priority: "medium",
-    icon: <BarChart3 className="h-6 w-6" />,
-    color: "gray",
-  },
-  {
-    id: 5,
-    title: "Security Best Practices",
-    description: "Keep your account and data secure",
-    readTime: "10 min",
-    priority: "high",
-    icon: <Shield className="h-6 w-6" />,
-    color: "green",
-  },
-  {
-    id: 6,
-    title: "Calendar Integration",
-    description: "Sync your schedule and manage appointments",
-    readTime: "8 min",
-    priority: "low",
-    icon: <Calendar className="h-6 w-6" />,
-    color: "gray",
-  },
-  {
-    id: 7,
-    title: "Contact Management",
-    description: "Organize and manage your client relationships",
-    readTime: "12 min",
-    priority: "medium",
-    icon: <Users className="h-6 w-6" />,
-    color: "white",
-  },
-  {
-    id: 8,
-    title: "Troubleshooting Guide",
-    description: "Common issues and their solutions",
-    readTime: "15 min",
-    priority: "low",
-    icon: <HelpCircle className="h-6 w-6" />,
-    color: "gray",
-  },
-]
+const resources = resourceItems
 
 // Resource Card Component
 interface ResourceCardProps {
@@ -133,38 +62,40 @@ function ResourceCard({ resource }: ResourceCardProps): ReactElement {
   }
 
   return (
-    <div
-      className={cn(
-        "rounded-lg p-6 h-48 flex flex-col justify-between cursor-pointer hover:shadow-md transition-shadow",
-        getCardBackground(),
-      )}
-    >
-      <div>
-        <div className="flex items-start justify-between mb-3">
-          <div className={cn("p-2 rounded-lg", resource.color === "green" ? "bg-white/20" : "bg-green-100")}>
-            <div className={getIconColor()}>{resource.icon}</div>
+    <Link href={resource.href} className="block h-full">
+      <div
+        className={cn(
+          "rounded-lg p-6 h-48 flex flex-col justify-between cursor-pointer hover:shadow-md transition-shadow",
+          getCardBackground(),
+        )}
+      >
+        <div>
+          <div className="flex items-start justify-between mb-3">
+            <div className={cn("p-2 rounded-lg", resource.color === "green" ? "bg-white/20" : "bg-green-100")}>
+              <div className={getIconColor()}>{resource.icon}</div>
+            </div>
+            <span
+              className={cn("p-1 rounded-full", resource.color === "green" ? "hover:bg-white/20" : "hover:bg-gray-200")}
+            >
+              <ChevronRight className={cn("h-4 w-4", resource.color === "green" ? "text-white" : "text-gray-600")} />
+            </span>
           </div>
-          <button
-            className={cn("p-1 rounded-full", resource.color === "green" ? "hover:bg-white/20" : "hover:bg-gray-200")}
-          >
-            <ChevronRight className={cn("h-4 w-4", resource.color === "green" ? "text-white" : "text-gray-600")} />
-          </button>
+          <h3 className="font-semibold text-lg mb-2">{resource.title}</h3>
+          <p className={cn("text-sm", resource.color === "green" ? "text-white/80" : "text-gray-600")}>
+            {resource.description}
+          </p>
         </div>
-        <h3 className="font-semibold text-lg mb-2">{resource.title}</h3>
-        <p className={cn("text-sm", resource.color === "green" ? "text-white/80" : "text-gray-600")}>
-          {resource.description}
-        </p>
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Clock className={cn("h-4 w-4", resource.color === "green" ? "text-white/60" : "text-gray-500")} />
-          <span className={cn("text-sm", resource.color === "green" ? "text-white/80" : "text-gray-600")}>
-            {resource.readTime} read
-          </span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Clock className={cn("h-4 w-4", resource.color === "green" ? "text-white/60" : "text-gray-500")} />
+            <span className={cn("text-sm", resource.color === "green" ? "text-white/80" : "text-gray-600")}>
+              {resource.readTime} read
+            </span>
+          </div>
+          <span className={getPriorityBadge()}>{resource.priority}</span>
         </div>
-        <span className={getPriorityBadge()}>{resource.priority}</span>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -238,7 +169,7 @@ export function ResourcesTab(): ReactElement {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Additional Resources</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <Link href="/dashboard/resources" className="flex items-center gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <BookOpen className="h-5 w-5 text-blue-600" />
                 </div>
@@ -247,7 +178,7 @@ export function ResourcesTab(): ReactElement {
                   <p className="text-sm text-gray-600">Complete API and feature documentation</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-gray-400 ml-auto" />
-              </div>
+              </Link>
 
               <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
                 <div className="p-2 bg-purple-100 rounded-lg">
@@ -267,4 +198,4 @@ export function ResourcesTab(): ReactElement {
   )
 }
 
-export default ResourcesTab; 
+export default ResourcesTab

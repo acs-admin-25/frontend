@@ -180,7 +180,7 @@ export function ResourcesTab(): ReactElement {
                 <ChevronRight className="h-4 w-4 text-gray-400 ml-auto" />
               </Link>
 
-              <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
+              <Link href="/dashboard/support" className="flex items-center gap-3 p-4 bg-purple-50 rounded-lg border border-purple-200">
                 <div className="p-2 bg-purple-100 rounded-lg">
                   <HelpCircle className="h-5 w-5 text-purple-600" />
                 </div>
@@ -189,7 +189,7 @@ export function ResourcesTab(): ReactElement {
                   <p className="text-sm text-gray-600">Get help from our support team</p>
                 </div>
                 <ChevronRight className="h-4 w-4 text-gray-400 ml-auto" />
-              </div>
+              </Link>
             </div>
           </div>
         </div>

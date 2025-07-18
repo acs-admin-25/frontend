@@ -27,7 +27,7 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
     refreshCalendlyEvents,
     createEvent
   } = useCalendarData({
-    autoRefresh: true,
+    autoRefresh: false,
     refreshInterval: 5 * 60 * 1000, // 5 minutes
     enableGoogle: true,
     enableCalendly: true

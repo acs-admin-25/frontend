@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { CalendarEvent, CalendarFilters } from '@/types/calendar';
 
 export interface CalendarData {
@@ -36,12 +36,23 @@ export function useCalendarData(options: UseCalendarDataOptions = {}): CalendarD
   createEvent: (eventData: Partial<CalendarEvent>) => Promise<CalendarEvent | null>;
 } {
   const {
-    autoRefresh = true,
-    refreshInterval = 5 * 60 * 1000, // 5 minutes
-    filters = {},
-    enableGoogle = true,
-    enableCalendly = true
+    autoRefresh = false,
+    refreshInterval = 5 * 60 * 1000,
+    filters: initialFilters = {},
+    enableGoogle = false,
+    enableCalendly = false
   } = options;
+
+  // Memoize filters to prevent infinite re-renders
+  const filters = useMemo(() => initialFilters, [
+    initialFilters.dateRange?.start,
+    initialFilters.dateRange?.end,
+    initialFilters.sources,
+    initialFilters.statuses,
+    initialFilters.search,
+    initialFilters.attendees,
+    initialFilters.location
+  ]);
 
   const [data, setData] = useState<CalendarData>({
     events: [],
@@ -145,7 +156,7 @@ export function useCalendarData(options: UseCalendarDataOptions = {}): CalendarD
 
       return true;
     });
-  }, []);
+  }, [filters]);
 
   /**
    * Fetch calendar events from API
@@ -344,7 +355,7 @@ export function useCalendarData(options: UseCalendarDataOptions = {}): CalendarD
       const stats = calculateStats(filteredEvents);
       setData(prev => ({ ...prev, events: filteredEvents, stats }));
     }
-  }, [filters, data.loading, data.events, data.googleEvents, data.calendlyEvents, applyFilters, calculateStats]);
+  }, [filters, data.loading, applyFilters, calculateStats]);
 
   return {
     ...data,

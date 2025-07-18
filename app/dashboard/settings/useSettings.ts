@@ -17,7 +17,7 @@ export interface UserSettings {
     website?: string;
     
     // Email Signature
-    emailSignature?: string;
+    email_signature?: string;
     includeLogo?: boolean;
     includeSocialLinks?: boolean;
     
@@ -125,12 +125,24 @@ export function useSettings() {
             };
         }
 
+        // Debug logging for signature updates
+        if (updateData.email_signature) {
+            console.log('🔍 [Settings] Saving signature:', {
+                userId,
+                signatureLength: updateData.email_signature.length,
+                signaturePreview: updateData.email_signature.substring(0, 100) + '...',
+                hasSignature: !!updateData.email_signature
+            });
+        }
+
         try {
             // Prepare update data with timestamp
             const updatePayload = {
                 ...updateData,
                 updated_at: new Date().toISOString(),
             };
+
+            console.log('🔍 [Settings] Database update payload:', updatePayload);
 
             const { success, error } = await updateDb({
                 table_name: 'Users',
@@ -140,11 +152,18 @@ export function useSettings() {
                 update_data: updatePayload,
             });
 
+            console.log('🔍 [Settings] Database update result:', { success, error });
+
             if (success) {
                 // Update local state
                 const updatedData = { ...userData, ...updatePayload };
                 setUserData(updatedData);
                 setLastUpdated(new Date());
+                
+                console.log('✅ [Settings] Signature saved successfully:', {
+                    signatureLength: updatedData.email_signature?.length || 0,
+                    signaturePreview: updatedData.email_signature?.substring(0, 100) + '...'
+                });
                 
                 // Update session if name or email changed
                 if (updateData.name || updateData.email) {
@@ -168,6 +187,7 @@ export function useSettings() {
                     data: updatedData 
                 };
             } else {
+                console.error('❌ [Settings] Failed to save signature:', error);
                 return { 
                     success: false, 
                     error: error || 'Failed to update settings.' 
@@ -175,7 +195,7 @@ export function useSettings() {
             }
             
         } catch (err: any) {
-            console.error('Error updating settings:', err);
+            console.error('❌ [Settings] Error updating settings:', err);
             return { 
                 success: false, 
                 error: err.message || 'An unexpected error occurred while updating settings.' 

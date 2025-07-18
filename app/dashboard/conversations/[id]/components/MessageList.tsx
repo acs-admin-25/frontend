@@ -3,7 +3,7 @@ import { ChevronDown, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils/utils';
 import { MessageItem } from './MessageItem';
 import { groupMessagesByDate } from '@/lib/utils/conversation';
-import type { Conversation, Message } from '@/types/conversation';
+import type { Conversation, Message } from '@/lib/types/conversation';
 
 export interface MessageListProps {
   conversation: Conversation | null;
@@ -48,6 +48,21 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
   const messages = conversation?.messages || [];
   const clientEmail = conversation?.thread?.client_email || '';
 
+  // Debug logging for messages
+  useEffect(() => {
+    console.log('📜 [MessageList] Messages data:', {
+      conversationId: conversation?.thread?.conversation_id,
+      totalMessages: messages.length,
+      messages: messages.map((m: Message) => ({
+        id: m.id,
+        type: m.type,
+        sender: m.sender_name,
+        body: m.body?.substring(0, 30) + '...',
+        timestamp: m.timestamp
+      }))
+    });
+  }, [conversation, messages]);
+
   const groupedMessages = groupMessagesByDate(messages);
   const endOfMessagesRef = useRef<HTMLDivElement>(null);
 
@@ -61,10 +76,24 @@ export const MessageList = forwardRef<HTMLDivElement, MessageListProps>(({
     )
   })).filter(group => group.messages.length > 0);
 
+  // Debug logging for search filtering
+  useEffect(() => {
+    console.log('🔍 [MessageList] Search filtering:', {
+      searchQuery,
+      totalGroups: Object.keys(groupedMessages).length,
+      filteredGroups: filteredGroups.length,
+      groupedMessages: Object.entries(groupedMessages).map(([date, messages]) => ({
+        date,
+        messageCount: messages.length
+      }))
+    });
+  }, [searchQuery, groupedMessages, filteredGroups]);
+
   // Scroll to bottom when new messages arrive
   useEffect(() => {
+    console.log('📜 [MessageList] New messages detected, scrolling to bottom...');
     endOfMessagesRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages.length]); // Use messages.length to detect new messages
 
   // Handle scroll to show/hide new message button
   const handleScroll = () => {

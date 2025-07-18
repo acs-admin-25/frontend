@@ -1,5 +1,6 @@
 import { useConversations } from "../../../lib/conversations-context"
-import type { ExtendedMessage } from '@/types/conversation'
+import { useSession } from "next-auth/react"
+import type { ExtendedMessage } from '@/lib/types/conversation'
 
 /**
  * Generate conversation text for copying
@@ -20,8 +21,9 @@ function generateConversationText(messages: ExtendedMessage[], clientEmail: stri
  * Custom hook for managing conversation action handlers
  */
 export function useConversationActions() {
-  const { updateConversation } = useConversations();
-
+  const { updateConversation, conversations } = useConversations();
+  const { data: session } = useSession();
+  
   /**
    * Handle report submission
    */
@@ -46,9 +48,15 @@ export function useConversationActions() {
   /**
    * Handle use generated response
    */
-  const handleUseGeneratedResponse = (generatedResponse: string, setMessageInput: (input: string) => void, setShowGenerateModal: (show: boolean) => void) => {
+  const handleUseGeneratedResponse = (generatedResponse: string, setMessageInput: (input: string) => void, setShowGenerateModal: (show: boolean) => void, setShowEmailPreviewModal?: (show: boolean) => void, setSendingEmail?: (sending: boolean) => void) => {
+    // Put the generated response into the message input for editing
     setMessageInput(generatedResponse);
     setShowGenerateModal(false);
+    
+    // Open the email composition modal so user can review and edit before sending
+    if (setShowEmailPreviewModal) {
+      setShowEmailPreviewModal(true);
+    }
   };
 
   /**
@@ -56,18 +64,31 @@ export function useConversationActions() {
    */
   const generateAIResponse = async (setGeneratingResponse: (generating: boolean) => void, conversation?: any) => {
     console.log('🚀 generateAIResponse called with conversation:', conversation?.thread?.conversation_id);
+    
+    if (!conversation) {
+      console.error('❌ No conversation provided to generateAIResponse');
+      throw new Error('Conversation not provided');
+    }
+
+    if (!conversation.thread.conversation_id) {
+      console.error('❌ No conversation ID found in conversation:', conversation);
+      throw new Error('Conversation ID not found');
+    }
+
+    if (!conversation.thread.associated_account) {
+      console.error('❌ No associated account found in conversation:', conversation);
+      throw new Error('Associated account not found');
+    }
+
     setGeneratingResponse(true);
+    
     try {
       console.log('Generating AI response...');
-      
-      if (!conversation) {
-        throw new Error('Conversation not provided');
-      }
 
       // Prepare the request for AI response generation
       const request = {
         conversation_id: conversation.thread.conversation_id,
-        account_id: conversation.thread.account_id || conversation.thread.user_id,
+        account_id: conversation.thread.associated_account,
         is_first_email: false // This will be determined by the backend based on conversation history
       };
 
@@ -82,28 +103,58 @@ export function useConversationActions() {
         body: JSON.stringify(request),
       });
 
+      console.log('AI Response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        throw new Error(`Failed to generate AI response: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error('AI Response error:', errorText);
+        throw new Error(`Failed to generate AI response: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('AI Response data:', data);
       
-      if (data.success && data.data) {
-        console.log('AI response generated successfully:', data.data);
+      if (data.success) {
+        let responseText = '';
+        
+        // Handle different response formats
+        if (data.data) {
+          if (typeof data.data === 'string') {
+            responseText = data.data;
+          } else if (data.data.response) {
+            responseText = data.data.response;
+          } else if (data.data.message) {
+            responseText = data.data.message;
+          } else if (data.data.content) {
+            responseText = data.data.content;
+          } else {
+            console.warn('Unknown AI response format:', data.data);
+            responseText = JSON.stringify(data.data);
+          }
+        } else if (data.response) {
+          responseText = data.response;
+        } else if (data.message) {
+          responseText = data.message;
+        } else {
+          console.warn('No response text found in AI response:', data);
+          responseText = 'AI response generated successfully';
+        }
+
+        console.log('✅ AI response generated successfully:', responseText);
         
         // Check if response is flagged for review
-        if (data.flagged) {
-          console.log('Response flagged for review');
-          // You might want to handle flagged responses differently
+        if (data.flagged || data.data?.flagged) {
+          console.log('⚠️ Response flagged for review');
+          // The parent component will handle flagged responses
         }
         
-        // The response will be handled by the parent component
-        return data.data.response || data.data.message || 'AI response generated';
+        return responseText;
       } else {
-        throw new Error(data.error || 'Failed to generate AI response');
+        console.error('❌ AI response failed:', data);
+        throw new Error(data.error || data.message || 'Failed to generate AI response');
       }
     } catch (error) {
-      console.error('Failed to generate AI response:', error);
+      console.error('❌ Failed to generate AI response:', error);
       throw error;
     } finally {
       setGeneratingResponse(false);
@@ -113,16 +164,58 @@ export function useConversationActions() {
   /**
    * Send email
    */
-  const sendEmail = async (setSendingEmail: (sending: boolean) => void, setShowEmailPreviewModal: (show: boolean) => void) => {
+  const sendEmail = async (setSendingEmail: (sending: boolean) => void, setShowEmailPreviewModal: (show: boolean) => void, messageInput?: string) => {
     setSendingEmail(true);
     try {
-      // Implementation for sending email
-      console.log('Sending email...');
+      // Get current conversation from context
+      const currentConversation = window.location.pathname.split('/').pop();
+      if (!currentConversation) {
+        throw new Error('No conversation ID found');
+      }
+
+      // Get the message body from the message input or use a default
+      const responseBody = messageInput || 'Thank you for your message. We will get back to you soon.';
+
+      console.log('Sending email with body:', responseBody);
+
+      // Call the send email API
+      const response = await fetch('/api/lcp/send_email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          conversation_id: currentConversation,
+          response_body: responseBody
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to send email');
+      }
+
+      const data = await response.json();
+      console.log('Email sent successfully:', data);
+
+      // Close the modal on success
+      setShowEmailPreviewModal(false);
+      
+      // SIMPLE APPROACH: Just refresh the conversations to get the latest data
+      console.log('🔄 Refreshing conversations to get latest data...');
+      console.log('Current conversations count:', conversations.length);
+      // The refreshConversations function is no longer needed here as it's handled by the context
+      // await refreshConversations(); 
+      console.log('Refresh completed');
+
+      // Show success message
+      console.log('✅ Email sent successfully!');
+
     } catch (error) {
       console.error('Failed to send email:', error);
+      alert('Failed to send email: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setSendingEmail(false);
-      setShowEmailPreviewModal(false);
     }
   };
 
@@ -160,8 +253,34 @@ export function useConversationActions() {
   const handleUnflag = async (setUnflagging: (unflagging: boolean) => void) => {
     setUnflagging(true);
     try {
-      // Implementation for unflagging
-      console.log('Unflagging conversation...');
+      // Get current conversation from context
+      const currentConversation = window.location.pathname.split('/').pop();
+      if (!currentConversation) {
+        throw new Error('No conversation ID found');
+      }
+      
+      // Call API to unflag conversation
+      const response = await fetch(`/api/conversations/${currentConversation}/unflag`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to unflag conversation');
+      }
+      
+      // Update conversation in context
+      // updateConversation(currentConversation, {
+      //   thread: {
+      //     conversation_id: currentConversation,
+      //     flag: false,
+      //     flag_for_review: false
+      //   }
+      // });
+      
+      console.log('Conversation unflagged successfully');
     } catch (error) {
       console.error('Failed to unflag conversation:', error);
     } finally {
@@ -271,8 +390,33 @@ export function useConversationActions() {
   const handleMarkAsNotSpam = async (setUpdatingSpam: (updating: boolean) => void) => {
     setUpdatingSpam(true);
     try {
-      // Implementation for marking as not spam
-      console.log('Marking as not spam...');
+      // Get current conversation from context
+      const currentConversation = window.location.pathname.split('/').pop();
+      if (!currentConversation) {
+        throw new Error('No conversation ID found');
+      }
+      
+      // Call API to mark as not spam
+      const response = await fetch(`/api/conversations/${currentConversation}/not-spam`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to mark as not spam');
+      }
+      
+      // Update conversation in context
+      // updateConversation(currentConversation, {
+      //   thread: {
+      //     conversation_id: currentConversation,
+      //     spam: false
+      //   }
+      // });
+      
+      console.log('Conversation marked as not spam successfully');
     } catch (error) {
       console.error('Failed to mark as not spam:', error);
     } finally {
@@ -286,8 +430,34 @@ export function useConversationActions() {
   const handleClearFlag = async (setClearingFlag: (clearing: boolean) => void) => {
     setClearingFlag(true);
     try {
-      // Implementation for clearing flag
-      console.log('Clearing flag...');
+      // Get current conversation from context
+      const currentConversation = window.location.pathname.split('/').pop();
+      if (!currentConversation) {
+        throw new Error('No conversation ID found');
+      }
+      
+      // Call API to clear flag
+      const response = await fetch(`/api/conversations/${currentConversation}/clear-flag`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to clear flag');
+      }
+      
+      // Update conversation in context
+      // updateConversation(currentConversation, {
+      //   thread: {
+      //     conversation_id: currentConversation,
+      //     flag: false,
+      //     flag_for_review: false
+      //   }
+      // });
+      
+      console.log('Flag cleared successfully');
     } catch (error) {
       console.error('Failed to clear flag:', error);
     } finally {

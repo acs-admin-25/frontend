@@ -2,8 +2,8 @@ import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
 import { useSession } from "next-auth/react"
 import type { Session } from "next-auth"
-import { useOptimisticConversations } from "@/lib/hooks/useOptimisticConversations"
-import type { Conversation } from "@/types/conversation"
+import { useConversations } from "../../../lib/conversations-context"
+import type { Conversation } from "@/lib/types/conversation"
 
 // Temporary state type, will be removed.
 interface ColumnState {
@@ -22,18 +22,38 @@ export function useConversationDetail() {
   };
   const conversationId = params?.id as string;
 
-  // Use the new optimistic conversations hook
+  // Use the conversations context
   const { 
     conversations, 
-    loading: isLoading, 
-    error: conversationError
-  } = useOptimisticConversations({
-    autoRefresh: true,
-    checkNewEmails: true
-  });
+    isLoading: conversationsLoading, 
+    error: conversationError,
+    refreshConversations
+  } = useConversations();
 
-  // Get the specific conversation from the optimistic system
-  const conversation = conversations.find(conv => conv.thread.conversation_id === conversationId);
+  // Get the specific conversation from the context
+  const conversation = conversations.find((conv: Conversation) => conv.thread.conversation_id === conversationId);
+
+  // Loading state should be true if conversations are loading OR if we have conversations but no matching conversation
+  const isLoading = conversationsLoading || (!conversationsLoading && conversations.length > 0 && !conversation);
+
+  // Log for debugging
+  useEffect(() => {
+    console.log('[useConversationDetail] Conversation lookup:', {
+      conversationId,
+      conversationsLength: conversations.length,
+      foundConversation: !!conversation,
+      conversationIds: conversations.map((c: Conversation) => c.thread.conversation_id).slice(0, 5),
+      isLoading
+    });
+  }, [conversationId, conversations, conversation, isLoading]);
+
+  // If we have conversations but no matching conversation, try to refresh
+  useEffect(() => {
+    if (!conversationsLoading && conversations.length > 0 && !conversation && conversationId) {
+      console.log('[useConversationDetail] Conversation not found, refreshing...');
+      refreshConversations();
+    }
+  }, [conversationsLoading, conversations.length, conversation, conversationId, refreshConversations]);
 
   // UI State
   const [messageInput, setMessageInput] = useState('');
@@ -85,14 +105,99 @@ export function useConversationDetail() {
     console.log('Update widget position:', widgetId, position);
   };
 
-  // Load user signature
+  // Load user signature and email from database
   useEffect(() => {
     const loadUserSignature = async () => {
-      // In a real app, this would fetch from a user settings table
-      setUserSignature('Best regards,\n[Your Name]\nReal Estate Agent');
-      setUserResponseEmail(session?.user?.email || 'agent@example.com');
+      if (!session?.user?.id) {
+        console.log('🔍 [Signature] No session user ID available');
+        return;
+      }
+      
+      console.log('🔍 [Signature] Fetching signature for user ID:', session.user.id);
+      console.log('🔍 [Signature] Session data:', {
+        userId: session.user.id,
+        userEmail: session.user.email
+      });
+      
+      try {
+        // Fetch user data from database
+        const requestBody = {
+          table_name: 'Users',
+          index_name: 'id-index',
+          key_name: 'id',
+          key_value: session.user.id
+        };
+        
+        console.log('🔍 [Signature] Database request:', requestBody);
+        
+        const response = await fetch('/api/db/select', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        console.log('🔍 [Signature] Database response status:', response.status);
+        console.log('🔍 [Signature] Database response headers:', Object.fromEntries(response.headers.entries()));
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('🔍 [Signature] Database response data:', data);
+          
+          if (data.success && data.items && data.items.length > 0) {
+            const userData = data.items[0];
+            console.log('🔍 [Signature] User data found:', {
+              id: userData.id,
+              email: userData.email,
+              hasSignature: !!userData.email_signature,
+              signatureLength: userData.email_signature?.length || 0,
+              signatureField: userData.email_signature,
+              allFields: Object.keys(userData)
+            });
+            
+            const signature = userData.email_signature || 'Best regards,\n[Your Name]\nReal Estate Agent';
+            const email = userData.email || session.user.email || 'agent@example.com';
+            
+            setUserSignature(signature);
+            setUserResponseEmail(email);
+            
+            console.log('✅ [Signature] Signature loaded successfully:', {
+              signature: signature.substring(0, 100) + '...',
+              email,
+              finalSignatureLength: signature.length
+            });
+          } else {
+            console.log('⚠️ [Signature] No user data found in response');
+            console.log('⚠️ [Signature] Response structure:', {
+              success: data.success,
+              hasItems: !!data.items,
+              itemsLength: data.items?.length || 0,
+              itemsKeys: data.items ? Object.keys(data.items) : null
+            });
+            // Fallback to default values
+            setUserSignature('Best regards,\n[Your Name]\nReal Estate Agent');
+            setUserResponseEmail(session.user.email || 'agent@example.com');
+          }
+        } else {
+          console.error('❌ [Signature] Failed to fetch user signature:', response.statusText);
+          const errorText = await response.text();
+          console.error('❌ [Signature] Error response body:', errorText);
+          // Fallback to default values
+          setUserSignature('Best regards,\n[Your Name]\nReal Estate Agent');
+          setUserResponseEmail(session.user.email || 'agent@example.com');
+        }
+      } catch (error) {
+        console.error('❌ [Signature] Error fetching user signature:', error);
+        // Fallback to default values
+        setUserSignature('Best regards,\n[Your Name]\nReal Estate Agent');
+        setUserResponseEmail(session.user.email || 'agent@example.com');
+      }
     };
-    if (session?.user) loadUserSignature();
+    
+    if (session?.user) {
+      loadUserSignature();
+    }
   }, [session]);
 
   if (conversationError) {

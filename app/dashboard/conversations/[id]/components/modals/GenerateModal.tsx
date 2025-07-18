@@ -94,6 +94,12 @@ export const GenerateModal: React.FC<GenerateModalProps> = ({
                     </div>
                   </div>
                   
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <p className="text-sm text-blue-800">
+                      <strong>Next Steps:</strong> Click "Use This Response & Compose Email" to open the email composition interface where you can review, edit, and send the email.
+                    </p>
+                  </div>
+                  
                   <div className="flex gap-3">
                     <button
                       onClick={onUseResponse}
@@ -101,7 +107,7 @@ export const GenerateModal: React.FC<GenerateModalProps> = ({
                       className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Check className="w-4 h-4" />
-                      <span>Use This Response</span>
+                      <span>Use This Response & Compose Email</span>
                     </button>
                     <button
                       onClick={onRegenerate}

@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, ThumbsDown, Meh, ThumbsUp, Star, ArrowRight, ArrowLeft, TrendingUp, Repeat, MessageCircle, CheckCircle, BookOpen } from 'lucide-react';
+import { X, ThumbsDown, Meh, ThumbsUp, Star, ArrowRight, ArrowLeft, TrendingUp, Repeat, MessageCircle, CheckCircle, BookOpen, Clock, TrendingDown, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils/utils';
 import { EVScoreScale } from './EVScoreScale';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useRouter, usePathname } from 'next/navigation';
 import { useModal } from '@/components/providers/ModalProvider';
+import type { EVScoreHistory } from '@/lib/types/conversation';
 
 interface EVScoreInfoModalProps {
   isOpen: boolean;
   onClose: () => void;
   score?: number;
+  scoreHistory?: EVScoreHistory[];
+  scoreStatus?: 'initial' | 'updating' | 'stable' | 'improving' | 'declining';
   modalId?: string;
 }
 
@@ -181,7 +184,7 @@ function EVScoreFullGuideModal({ isOpen, onClose, onBack }: { isOpen: boolean; o
   );
 }
 
-export function EVScoreInfoModal({ isOpen, onClose, score, modalId = 'ev-score-modal' }: EVScoreInfoModalProps) {
+export function EVScoreInfoModal({ isOpen, onClose, score, scoreHistory, scoreStatus, modalId = 'ev-score-modal' }: EVScoreInfoModalProps) {
   const [showGuide, setShowGuide] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
@@ -193,6 +196,12 @@ export function EVScoreInfoModal({ isOpen, onClose, score, modalId = 'ev-score-m
 
   // Use global modal state
   const isActuallyOpen = isOpen && activeModal === modalId;
+
+  // Get score trend information
+  const hasScoreHistory = scoreHistory && scoreHistory.length > 1;
+  const initialScore = hasScoreHistory ? scoreHistory[0].score : score;
+  const scoreChange = hasScoreHistory ? score! - initialScore! : 0;
+  const scoreChangePercent = initialScore ? Math.round((scoreChange / initialScore) * 100) : 0;
 
   useEffect(() => {
     if (isOpen && !prevPathRef.current) {
@@ -267,6 +276,77 @@ export function EVScoreInfoModal({ isOpen, onClose, score, modalId = 'ev-score-m
                   <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.1, duration: 0.4 }}>
                     <EVScoreScale score={score} className="mb-6 sm:mb-8" />
                   </motion.div>
+                  
+                  {/* Dynamic Score Information */}
+                  {hasScoreHistory && (
+                    <motion.div 
+                      initial={{ y: 20, opacity: 0 }} 
+                      animate={{ y: 0, opacity: 1 }} 
+                      transition={{ delay: 0.2, duration: 0.4 }}
+                      className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-6 sm:mb-8"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-lg font-semibold text-card-foreground">Score Evolution</h4>
+                        <div className="flex items-center gap-2">
+                          {scoreStatus === 'improving' && <TrendingUp className="w-5 h-5 text-status-success" />}
+                          {scoreStatus === 'declining' && <TrendingDown className="w-5 h-5 text-status-error" />}
+                          {scoreStatus === 'stable' && <Minus className="w-5 h-5 text-muted-foreground" />}
+                          {scoreStatus === 'updating' && <div className="w-5 h-5 rounded-full bg-muted-foreground animate-pulse" />}
+                          <span className={cn(
+                            "text-sm font-medium px-2 py-1 rounded-full",
+                            scoreStatus === 'improving' ? "bg-status-success/20 text-status-success" :
+                            scoreStatus === 'declining' ? "bg-status-error/20 text-status-error" :
+                            scoreStatus === 'stable' ? "bg-muted/20 text-muted-foreground" :
+                            "bg-warning/20 text-warning"
+                          )}>
+                            {scoreStatus?.charAt(0).toUpperCase() + scoreStatus?.slice(1)}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-card-foreground">{initialScore}</div>
+                          <div className="text-sm text-muted-foreground">Initial Score</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-card-foreground">{score}</div>
+                          <div className="text-sm text-muted-foreground">Current Score</div>
+                        </div>
+                        <div className="text-center">
+                          <div className={cn(
+                            "text-2xl font-bold",
+                            scoreChange > 0 ? "text-status-success" : 
+                            scoreChange < 0 ? "text-status-error" : "text-muted-foreground"
+                          )}>
+                            {scoreChange > 0 ? '+' : ''}{scoreChange}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Change</div>
+                        </div>
+                      </div>
+                      
+                      {/* Score History Timeline */}
+                      <div className="space-y-2">
+                        <h5 className="text-sm font-medium text-muted-foreground mb-3">Score History</h5>
+                        <div className="space-y-2 max-h-32 overflow-y-auto">
+                          {scoreHistory?.slice().reverse().map((entry, index) => (
+                            <div key={index} className="flex items-center justify-between text-sm p-2 bg-muted/30 rounded-lg">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium">{entry.score}</span>
+                                {entry.reason && (
+                                  <span className="text-xs text-muted-foreground">({entry.reason})</span>
+                                )}
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(entry.timestamp).toLocaleDateString()}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
                   {/* Score range cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
                     {scoreRanges.map((range, i) => (

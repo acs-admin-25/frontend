@@ -11,6 +11,9 @@ import { AIInsights } from './AIInsights';
 import { FlaggedStatusWidget } from './FlaggedStatusWidget';
 import { SpamStatusWidget } from './SpamStatusWidget';
 import { NotesWidget } from './NotesWidget';
+import { ConversationMetricsWidget } from './ConversationMetricsWidget';
+import { QuickActionsWidget } from './QuickActionsWidget';
+import { EmailTemplatesWidget } from './EmailTemplatesWidget';
 import { cn } from '@/lib/utils/utils';
 import { Conversation } from '@/lib/types/conversation';
 import { WidgetActions, WidgetInstance, WidgetState } from '@/lib/types/widgets';
@@ -32,6 +35,9 @@ const WIDGET_COMPONENTS = {
   'flagged-status': FlaggedStatusWidget,
   'spam-status': SpamStatusWidget,
   'notes': NotesWidget,
+  'conversation-metrics': ConversationMetricsWidget,
+  'quick-actions': QuickActionsWidget,
+  'email-templates': EmailTemplatesWidget,
 } as const;
 
 export function FloatingWidget({
@@ -60,7 +66,16 @@ export function FloatingWidget({
   // Handle different widget prop requirements
   const renderWidget = () => {
     if (widget.widgetId === 'ai-insights') {
-      return <AIInsights thread={conversation?.thread || null} />;
+      return (
+        <AIInsights 
+          widget={widget}
+          conversation={conversation}
+          actions={actions}
+          state={state}
+          onRemoveWidget={handleRemoveWidget}
+          className="w-full h-full"
+        />
+      );
     }
     
     if (widget.widgetId === 'contact') {
@@ -79,12 +94,12 @@ export function FloatingWidget({
     if (widget.widgetId === 'flagged-status') {
       return (
         <FlaggedStatusWidget
+          widget={widget}
           conversation={conversation}
-          onUnflag={() => actions.onUnflag?.()}
-          updating={state.updating || false}
-          onComplete={actions.onComplete}
-          onClearFlag={actions.onClearFlag}
-          clearingFlag={state.clearingFlag || false}
+          actions={actions}
+          state={state}
+          onRemoveWidget={handleRemoveWidget}
+          className="w-full h-full"
         />
       );
     }
@@ -92,9 +107,12 @@ export function FloatingWidget({
     if (widget.widgetId === 'spam-status') {
       return (
         <SpamStatusWidget
+          widget={widget}
           conversation={conversation}
-          onMarkAsNotSpam={() => actions.onMarkAsNotSpam?.()}
-          updating={state.updating || false}
+          actions={actions}
+          state={state}
+          onRemoveWidget={handleRemoveWidget}
+          className="w-full h-full"
         />
       );
     }
@@ -104,6 +122,45 @@ export function FloatingWidget({
         <NotesWidget
           notes={''}
           onSave={(notes: string) => console.log('Save notes:', notes)}
+        />
+      );
+    }
+    
+    if (widget.widgetId === 'conversation-metrics') {
+      return (
+        <ConversationMetricsWidget
+          widget={widget}
+          conversation={conversation}
+          actions={actions}
+          state={state}
+          onRemoveWidget={handleRemoveWidget}
+          className="w-full h-full"
+        />
+      );
+    }
+    
+    if (widget.widgetId === 'quick-actions') {
+      return (
+        <QuickActionsWidget
+          widget={widget}
+          conversation={conversation}
+          actions={actions}
+          state={state}
+          onRemoveWidget={handleRemoveWidget}
+          className="w-full h-full"
+        />
+      );
+    }
+    
+    if (widget.widgetId === 'email-templates') {
+      return (
+        <EmailTemplatesWidget
+          widget={widget}
+          conversation={conversation}
+          actions={actions}
+          state={state}
+          onRemoveWidget={handleRemoveWidget}
+          className="w-full h-full"
         />
       );
     }

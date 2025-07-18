@@ -5,9 +5,9 @@
 
 import React from 'react';
 import { ContactWidgetContent } from './ContactWidgetContent';
-import { BaseWidget } from '@/components/features/widgets/BaseWidget';
 import { Conversation } from '@/lib/types/conversation';
 import { WidgetInstance, WidgetActions, WidgetState } from '@/lib/types/widgets';
+import { cn } from '@/lib/utils/utils';
 
 interface ContactWidgetProps {
   widget: WidgetInstance;
@@ -29,20 +29,12 @@ export function ContactWidget({
   className 
 }: ContactWidgetProps) {
   return (
-    <BaseWidget
-      widget={widget}
-      conversation={conversation}
-      actions={actions}
-      state={state}
-      onRemoveWidget={onRemoveWidget}
-      onMakeWidgetFloat={onMakeWidgetFloat}
-      className={className}
-    >
+    <div className={cn("w-full h-full", className)}>
       <ContactWidgetContent
         conversation={conversation}
         actions={actions}
         className="w-full h-full"
       />
-    </BaseWidget>
+    </div>
   );
 } 

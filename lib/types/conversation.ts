@@ -35,8 +35,13 @@ export interface Message {
   type: "inbound-email" | "outbound-email";
   read: boolean;
 
-  // AI & Analysis
-  ev_score?: number;
+  // AI & Analysis - Enhanced for dynamic scoring
+  ev_score?: number; // Current EV score (for backward compatibility)
+  ev_scores?: EVScoreHistory[]; // History of EV scores over time
+  ev_score_current?: number; // Current/latest EV score
+  ev_score_initial?: number; // Initial EV score when message was first analyzed
+  ev_score_updated_at?: string; // When the score was last updated
+  ev_score_status?: 'initial' | 'updating' | 'stable' | 'improving' | 'declining'; // Score status
 
   // Additional fields
   associated_account?: string;
@@ -54,6 +59,17 @@ export interface ExtendedMessage extends Message {
   isEditing?: boolean;
   showActions?: boolean;
   // Add any other UI-specific properties here
+}
+
+/**
+ * Represents the history of EV scores for a message
+ */
+export interface EVScoreHistory {
+  score: number;
+  timestamp: string; // When this score was calculated
+  reason?: string; // Why the score changed (e.g., "re-analyzed", "user feedback", "context update")
+  confidence?: number; // Confidence level of this score (0-1)
+  factors?: string[]; // Factors that influenced this score
 }
 
 /**

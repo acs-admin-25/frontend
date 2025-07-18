@@ -5,10 +5,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, User, Sparkles, Flag, Shield, StickyNote, Zap, BarChart3, Mail } from 'lucide-react';
+import { X, User, Sparkles, Flag, Shield, StickyNote, Zap, BarChart3, Mail, Grid3X3 } from 'lucide-react';
 import { cn } from '@/lib/utils/utils';
 import { AVAILABLE_WIDGETS, getWidgetsByCategory } from '@/lib/utils/widgets';
-import type { WidgetInstance } from '@/types/widgets';
+import type { WidgetInstance } from '@/lib/types/widgets';
 import { useModal } from '@/components/providers/ModalProvider';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -17,6 +17,8 @@ interface WidgetToolboxModalProps {
   onClose: () => void;
   currentWidgets: WidgetInstance[];
   onAddWidget: (widgetId: string) => void;
+  onRemoveWidget?: (widgetId: string) => void;
+  onToggleWidgetVisibility?: (widgetId: string) => void;
   modalId?: string;
 }
 
@@ -46,9 +48,12 @@ export function WidgetToolboxModal({
   onClose,
   currentWidgets,
   onAddWidget,
+  onRemoveWidget,
+  onToggleWidgetVisibility,
   modalId = 'widget-toolbox-modal'
 }: WidgetToolboxModalProps) {
   const [selectedCategory, setSelectedCategory] = useState<'contact' | 'insights' | 'actions' | 'analytics' | 'tools'>('contact');
+  const [activeTab, setActiveTab] = useState<'current' | 'available'>('current');
   const { activeModal, openModal, closeModal } = useModal();
   
   // Use global modal state
@@ -102,83 +107,174 @@ export function WidgetToolboxModal({
             aria-modal="true"
             role="dialog"
           >
-            <div 
-              className="w-full max-w-2xl bg-card border-2 border-border/60 rounded-xl shadow-xl overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
+            <div className="bg-card rounded-2xl shadow-2xl border border-border/60 w-full max-w-4xl max-h-[90vh] overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-border/40 bg-muted/60">
-                <h3 className="text-lg font-semibold text-foreground">Widget Toolbox</h3>
+              <div className="flex items-center justify-between p-6 border-b border-border/40 bg-muted/30">
+                <div>
+                  <h2 className="text-xl font-semibold text-foreground">Widget Manager</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Manage your conversation widgets</p>
+                </div>
                 <button
                   onClick={onClose}
                   className="p-2 hover:bg-muted rounded-lg transition-colors"
-                  title="Close"
                 >
                   <X className="w-5 h-5 text-muted-foreground" />
                 </button>
               </div>
 
-              {/* Category Tabs */}
-              <div className="flex border-b border-border/40">
-                {categories.map(category => (
-                  <button
-                    key={category}
-                    onClick={() => setSelectedCategory(category)}
-                    className={cn(
-                      "flex-1 px-4 py-3 text-sm font-medium transition-colors capitalize",
-                      selectedCategory === category
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                    )}
-                  >
-                    {category}
-                  </button>
-                ))}
+              {/* Tabs */}
+              <div className="flex border-b border-border/40 bg-muted/20">
+                <button
+                  onClick={() => setActiveTab('current')}
+                  className={cn(
+                    "flex-1 px-6 py-3 text-sm font-medium transition-colors",
+                    activeTab === 'current'
+                      ? "text-primary border-b-2 border-primary bg-background/50"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Current Widgets ({currentWidgets.length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('available')}
+                  className={cn(
+                    "flex-1 px-6 py-3 text-sm font-medium transition-colors",
+                    activeTab === 'available'
+                      ? "text-primary border-b-2 border-primary bg-background/50"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Add Widgets
+                </button>
               </div>
 
-              {/* Available Widgets */}
-              <div className="max-h-96 overflow-y-auto p-6 scrollbar-acs">
-                {availableToAdd.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-muted rounded-xl flex items-center justify-center mx-auto mb-4 border-2 border-border/60">
-                      <X className="w-8 h-8 text-muted-foreground" />
-                    </div>
-                    <h4 className="text-sm font-medium text-foreground mb-2">All widgets added</h4>
-                    <p className="text-sm text-muted-foreground">
-                      All {selectedCategory} widgets are already in your layout
-                    </p>
+              {/* Content */}
+              <div className="p-6 max-h-[60vh] overflow-y-auto">
+                {activeTab === 'current' ? (
+                  <div className="space-y-4">
+                    {currentWidgets.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Grid3X3 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-foreground mb-2">No widgets added</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Add some widgets to customize your conversation view
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('available')}
+                          className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm"
+                        >
+                          Browse Widgets
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-3">
+                        {currentWidgets.map(widget => (
+                          <div
+                            key={widget.id}
+                            className="flex items-center gap-4 p-4 bg-background border border-border/60 rounded-lg"
+                          >
+                            <div className={cn(
+                              "w-10 h-10 rounded-lg flex items-center justify-center border",
+                              getCategoryColor(widget.config.category)
+                            )}>
+                              {getWidgetIcon(widget.widgetId)}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="text-sm font-medium text-foreground">
+                                {widget.config.name}
+                              </h4>
+                              <p className="text-xs text-muted-foreground">
+                                {widget.config.description}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {onToggleWidgetVisibility && (
+                                <button
+                                  onClick={() => onToggleWidgetVisibility(widget.id)}
+                                  className={cn(
+                                    "px-3 py-1 text-xs rounded-full transition-colors",
+                                    widget.isVisible
+                                      ? "bg-primary/10 text-primary hover:bg-primary/20"
+                                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                  )}
+                                >
+                                  {widget.isVisible ? 'Visible' : 'Hidden'}
+                                </button>
+                              )}
+                              {onRemoveWidget && (
+                                <button
+                                  onClick={() => onRemoveWidget(widget.id)}
+                                  className="p-2 text-muted-foreground hover:text-status-error hover:bg-status-error/10 rounded-lg transition-colors"
+                                  title="Remove widget"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    {availableToAdd.map(widget => (
-                      <motion.button
-                        key={widget.id}
-                        onClick={() => handleAddWidget(widget.id)}
-                        className="flex flex-col items-center gap-3 p-4 bg-card border-2 border-border/60 rounded-xl hover:border-primary/50 hover:shadow-lg transition-all duration-200 group"
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                      >
-                        <div className={cn(
-                          "w-12 h-12 rounded-xl flex items-center justify-center border-2",
-                          getCategoryColor(widget.category)
-                        )}>
-                          {getWidgetIcon(widget.id)}
+                  <div>
+                    {/* Category tabs */}
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {categories.map(category => (
+                        <button
+                          key={category}
+                          onClick={() => setSelectedCategory(category)}
+                          className={cn(
+                            "px-4 py-2 rounded-lg text-sm font-medium transition-colors capitalize",
+                            selectedCategory === category
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+                          )}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Available widgets */}
+                    {availableToAdd.length === 0 ? (
+                      <div className="text-center py-12">
+                        <div className="w-12 h-12 bg-muted/50 rounded-lg flex items-center justify-center mx-auto mb-4">
+                          <Grid3X3 className="w-6 h-6 text-muted-foreground" />
                         </div>
-                        <div className="text-center">
-                          <h4 className="text-sm font-medium text-foreground leading-tight group-hover:text-primary transition-colors">
-                            {widget.name}
-                          </h4>
-                          <p className="text-xs text-muted-foreground mt-1 leading-tight">
-                            {widget.description}
-                          </p>
-                          <div className="mt-2">
-                            <span className="inline-block px-2 py-1 text-xs font-medium rounded bg-primary/10 text-primary">
-                              {widget.size}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.button>
-                    ))}
+                        <h3 className="text-lg font-medium text-foreground mb-2">All widgets added</h3>
+                        <p className="text-sm text-muted-foreground">
+                          You've already added all available {selectedCategory} widgets
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {availableToAdd.map(widget => (
+                          <motion.button
+                            key={widget.id}
+                            onClick={() => handleAddWidget(widget.id)}
+                            className="flex flex-col items-center gap-3 p-4 bg-background border border-border/60 rounded-xl hover:border-primary/50 hover:shadow-lg transition-all duration-200 group"
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                          >
+                            <div className={cn(
+                              "w-12 h-12 rounded-xl flex items-center justify-center border-2",
+                              getCategoryColor(widget.category)
+                            )}>
+                              {getWidgetIcon(widget.id)}
+                            </div>
+                            <div className="text-center">
+                              <h4 className="text-sm font-medium text-foreground leading-tight group-hover:text-primary transition-colors">
+                                {widget.name}
+                              </h4>
+                              <p className="text-xs text-muted-foreground mt-1 leading-tight">
+                                {widget.description}
+                              </p>
+                            </div>
+                          </motion.button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -186,7 +282,10 @@ export function WidgetToolboxModal({
               {/* Footer */}
               <div className="flex items-center justify-between p-4 border-t border-border/40 bg-muted/30">
                 <p className="text-sm text-muted-foreground">
-                  {availableToAdd.length} widget{availableToAdd.length !== 1 ? 's' : ''} available
+                  {activeTab === 'current' 
+                    ? `${currentWidgets.length} widget${currentWidgets.length !== 1 ? 's' : ''} active`
+                    : `${availableToAdd.length} widget${availableToAdd.length !== 1 ? 's' : ''} available`
+                  }
                 </p>
                 <button
                   onClick={onClose}

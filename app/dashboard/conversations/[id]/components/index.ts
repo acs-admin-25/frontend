@@ -12,7 +12,6 @@ export { MessageItem } from './MessageItem';
 export { AIResponseSection } from './AIResponseSection';
 export { ConversationAIResponse } from './ConversationAIResponse';
 export { MessageToolbar } from './MessageToolbar';
-export { AIToolbar } from './AIToolbar';
 
 // Enhanced components
 export { ResizableSidebar } from './ResizableSidebar';
@@ -25,6 +24,9 @@ export { MessageList } from './MessageList';
 export { FloatingWidget } from './FloatingWidget';
 export { WidgetToolboxModal } from './WidgetToolboxModal';
 export { HeaderToolbox } from './HeaderToolbox';
+export { ConversationMetricsWidget } from './ConversationMetricsWidget';
+export { QuickActionsWidget } from './QuickActionsWidget';
+export { EmailTemplatesWidget } from './EmailTemplatesWidget';
 
 // Modal components
 export { CompletionModal } from './modals/CompletionModal';
@@ -34,4 +36,4 @@ export { EmailPreviewModal } from './modals/EmailPreviewModal';
 export { FlaggedNotificationModal } from './modals/FlaggedNotificationModal';
 
 // Types
-export type { ExtendedMessage } from '@/types/conversation'; 
+export type { ExtendedMessage } from '@/lib/types/conversation'; 

@@ -91,6 +91,9 @@ export function HeroSection({ data, className }: HeroSectionProps) {
                         WebkitBackgroundClip: 'text',
                         WebkitTextFillColor: 'transparent',
                         display: 'inline-block',
+                        backgroundColor: 'rgba(255,255,255,0.0)', // transparent background
+                        paddingBottom: '0.25em', // add space below to prevent cropping
+                        lineHeight: 1.1, // slightly increase line height
                       }}
                     >
                       Empowering

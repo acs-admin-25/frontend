@@ -11,6 +11,9 @@ import { WidgetInstance, WidgetActions, WidgetState } from '@/lib/types/widgets'
 import { cn } from '@/lib/utils/utils';
 import { ContactWidget } from '../../contacts/components/ContactWidget';
 import { FlaggedStatusWidget, SpamStatusWidget, NotesWidget, AIInsights } from '../../conversations/[id]/components';
+import { ConversationMetricsWidget } from '../../conversations/[id]/components/ConversationMetricsWidget';
+import { QuickActionsWidget } from '../../conversations/[id]/components/QuickActionsWidget';
+import { EmailTemplatesWidget } from '../../conversations/[id]/components/EmailTemplatesWidget';
 
 // Import widget components
 
@@ -35,8 +38,16 @@ const GRID_CONFIG = {
 };
 
 // AIInsights Widget Wrapper
-const AIInsightsWidget = ({ conversation, ...props }: any) => (
-  <AIInsights thread={conversation?.thread || null} />
+const AIInsightsWidget = ({ widget, conversation, actions, state, onRemoveWidget, onMakeWidgetFloat, className }: any) => (
+  <AIInsights 
+    widget={widget}
+    conversation={conversation} 
+    actions={actions}
+    state={state}
+    onRemoveWidget={onRemoveWidget}
+    onMakeWidgetFloat={onMakeWidgetFloat}
+    className={className}
+  />
 );
 
 // Widget component mapping
@@ -46,6 +57,9 @@ const WIDGET_COMPONENTS = {
   'flagged-status': FlaggedStatusWidget,
   'spam-status': SpamStatusWidget,
   'notes': NotesWidget,
+  'conversation-metrics': ConversationMetricsWidget,
+  'quick-actions': QuickActionsWidget,
+  'email-templates': EmailTemplatesWidget,
 } as const;
 
 export function SingleColumnWidgetLayout({
@@ -96,24 +110,24 @@ export function SingleColumnWidgetLayout({
 
   // Calculate responsive grid dimensions
   const gridDimensions = useMemo(() => {
-    // Base dimensions that work well across different screen sizes
-    let baseCellSize = 80;
-    let baseGap = 8;
-    let basePadding = 12;
+    // More compact base dimensions that work well in smaller spaces
+    let baseCellSize = 60;
+    let baseGap = 6;
+    let basePadding = 8;
     
     // Responsive adjustments based on screen size
     if (screenWidth >= 1200) {
-      baseCellSize = 100;
-      baseGap = 12;
-      basePadding = 16;
-    } else if (screenWidth >= 768) {
-      baseCellSize = 90;
-      baseGap = 10;
-      basePadding = 14;
-    } else {
-      baseCellSize = 70;
+      baseCellSize = 80;
       baseGap = 8;
       basePadding = 12;
+    } else if (screenWidth >= 768) {
+      baseCellSize = 70;
+      baseGap = 6;
+      basePadding = 10;
+    } else {
+      baseCellSize = 60;
+      baseGap = 4;
+      basePadding = 8;
     }
     
     return {
@@ -121,7 +135,7 @@ export function SingleColumnWidgetLayout({
       gap: baseGap,
       padding: basePadding,
       totalWidth: baseCellSize + baseGap,
-      minHeight: Math.max(GRID_CONFIG.minHeight, GRID_CONFIG.rows * baseCellSize + (GRID_CONFIG.rows - 1) * baseGap + basePadding * 2)
+      minHeight: Math.max(300, GRID_CONFIG.rows * baseCellSize + (GRID_CONFIG.rows - 1) * baseGap + basePadding * 2)
     };
   }, [screenWidth]);
 
@@ -278,40 +292,66 @@ export function SingleColumnWidgetLayout({
   // Get widget component
   const getWidgetComponent = useCallback((widget: WidgetInstance) => {
     const WidgetComponent = WIDGET_COMPONENTS[widget.widgetId as keyof typeof WIDGET_COMPONENTS];
-    if (!WidgetComponent) return null;
+    if (!WidgetComponent) {
+      console.warn(`[SingleColumnWidgetLayout] Widget component not found for: ${widget.widgetId}`);
+      return (
+        <div className="p-4 text-center text-muted-foreground">
+          <p>Widget not found: {widget.widgetId}</p>
+        </div>
+      );
+    }
     
-    return (
-      <WidgetComponent
-        widget={widget}
-        conversation={conversation}
-        actions={actions}
-        state={state}
-        onRemoveWidget={onRemoveWidget}
-        onMakeWidgetFloat={onMakeWidgetFloat}
-        className="w-full h-full"
-      />
-    );
+    try {
+      return (
+        <WidgetComponent
+          widget={widget}
+          conversation={conversation}
+          actions={actions}
+          state={state}
+          onRemoveWidget={onRemoveWidget}
+          onMakeWidgetFloat={onMakeWidgetFloat}
+          className="w-full h-full"
+        />
+      );
+    } catch (error) {
+      console.error(`[SingleColumnWidgetLayout] Error rendering widget ${widget.widgetId}:`, error);
+      return (
+        <div className="p-4 text-center text-muted-foreground">
+          <p>Error loading widget: {widget.widgetId}</p>
+          <p className="text-xs">{error instanceof Error ? error.message : 'Unknown error'}</p>
+        </div>
+      );
+    }
   }, [conversation, actions, state, onRemoveWidget, onMakeWidgetFloat]);
 
   // Calculate widget dimensions based on size and screen
   const getWidgetDimensions = useCallback((size: string) => {
     const [width, height] = size.split('x').map(Number);
-    const baseHeight = height * gridDimensions.cellSize + (height - 1) * gridDimensions.gap;
+    let baseHeight = height * gridDimensions.cellSize + (height - 1) * gridDimensions.gap;
     
-    // Add responsive adjustments
+    // Make widgets more compact but ensure contact widget has enough space
+    if (height === 1) {
+      baseHeight = Math.max(120, baseHeight); // Increased minimum height for single row widgets (like contact)
+    } else if (height === 2) {
+      baseHeight = Math.max(160, baseHeight); // Minimum height for double row widgets
+    } else if (height === 3) {
+      baseHeight = Math.max(200, baseHeight); // Minimum height for triple row widgets
+    }
+    
+    // Add responsive adjustments - make widgets more compact on smaller screens
     let responsiveHeight = baseHeight;
     if (screenWidth < 768) {
-      responsiveHeight = baseHeight * 0.9;
+      responsiveHeight = Math.max(100, baseHeight * 0.9); // Slightly smaller on mobile but still usable
     } else if (screenWidth >= 1200) {
-      responsiveHeight = baseHeight * 1.1;
+      responsiveHeight = Math.max(120, baseHeight); // Full size on large screens
     }
     
     return {
       width: '100%',
-      height: responsiveHeight,
+      height: Math.min(responsiveHeight, 250), // Increased cap maximum height
       gridWidth: width,
       gridHeight: height,
-      minHeight: Math.max(80, responsiveHeight * 0.8)
+      minHeight: Math.max(80, responsiveHeight * 0.8) // Minimum viable height
     };
   }, [gridDimensions, screenWidth]);
 
@@ -366,15 +406,15 @@ export function SingleColumnWidgetLayout({
   }, [draggedWidget, widgets, getWidgetDimensions]);
 
   return (
-    <div className={cn("w-full h-full bg-card border-2 border-border/60 rounded-xl shadow-lg p-4 flex flex-col", className)}>
+    <div className={cn("w-full h-full bg-card rounded-xl shadow-sm flex flex-col overflow-hidden", className)}>
       {/* Grid Container */}
       <div
         ref={containerRef}
-        className="flex-1 relative bg-muted/20 rounded-lg border border-border/40 p-2 min-h-0"
+        className="flex-1 bg-muted/10 rounded-lg m-2 p-2 overflow-hidden"
         style={{
-          width: '100%',
-          height: '100%',
-          minHeight: gridDimensions.minHeight,
+          width: 'calc(100% - 1rem)',
+          height: 'calc(100% - 1rem)',
+          minHeight: Math.min(gridDimensions.minHeight, 400),
         }}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
@@ -404,7 +444,7 @@ export function SingleColumnWidgetLayout({
         )}
 
         {/* Widgets */}
-        <div className="flex flex-col gap-3 w-full">
+        <div className="flex flex-col gap-2 w-full h-full overflow-y-auto overflow-x-hidden">
           {getReorderedWidgets().map((widget, index) => {
             const dimensions = getWidgetDimensions(widget.config.size);
             const isDragging = draggedWidget === widget.id;
@@ -415,17 +455,17 @@ export function SingleColumnWidgetLayout({
               <div
                 key={widget.id}
                 className={cn(
-                  "bg-card border border-border/60 rounded-lg shadow-sm overflow-hidden",
+                  "bg-card rounded-lg shadow-sm overflow-hidden flex-shrink-0",
                   "transition-all duration-300 ease-out cursor-grab active:cursor-grabbing",
                   isDragging && "opacity-50 scale-95 shadow-lg rotate-1",
-                  !isDragging && "hover:shadow-md hover:border-border hover:scale-[1.02]",
+                  !isDragging && "hover:shadow-md hover:scale-[1.02]",
                   willPopOut && "border-secondary shadow-lg",
                   isDropTarget && "border-primary/40 bg-primary/5 ring-2 ring-primary/20",
                   isReordering && !isDragging && !isDropTarget && "opacity-60"
                 )}
                 style={{
-                  height: dimensions.height,
-                  minHeight: dimensions.minHeight,
+                  height: Math.min(dimensions.height, 200), // Limit max height
+                  minHeight: Math.max(dimensions.minHeight, 80), // Ensure minimum height
                   zIndex: isDragging ? 10 : isDropTarget ? 5 : 1,
                   transform: isDragging 
                     ? 'scale(0.95) rotate(1deg)' 
@@ -438,7 +478,7 @@ export function SingleColumnWidgetLayout({
                 onDragEnd={handleDragEnd}
               >
                 {/* Widget Content */}
-                <div className="p-2 bg-background/80 h-full">
+                <div className="p-2 bg-background/80 h-full overflow-hidden">
                   {getWidgetComponent(widget)}
                 </div>
                 
@@ -454,10 +494,10 @@ export function SingleColumnWidgetLayout({
       </div>
 
       {/* Add Widget Button */}
-      <div className="mt-4 flex justify-center flex-shrink-0">
+      <div className="p-2 flex justify-center flex-shrink-0">
         <button
           onClick={onAddWidget}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-md"
+          className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm shadow-md"
         >
           <Plus className="w-4 h-4" />
           <span>Add Widget</span>

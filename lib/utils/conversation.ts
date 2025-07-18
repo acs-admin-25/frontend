@@ -3,7 +3,7 @@
  * All conversation data processing should go through these functions
  */
 
-import type { Conversation, Message } from '@/types/conversation';
+import type { Conversation, Message } from '@/lib/types/conversation';
 import { ensureLocalDate, compareDates } from '@/lib/utils/date';
 
 /**

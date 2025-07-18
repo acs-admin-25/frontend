@@ -23,7 +23,6 @@ import {
   FlaggedNotificationModal,
   WidgetToolboxModal,
   MessageToolbar,
-  AIToolbar,
   FloatingWidget
 } from "./components"
 
@@ -36,6 +35,7 @@ import { SingleColumnWidgetLayout } from "@/app/dashboard/components/layout/Sing
 import { useConversationDetail } from "./hooks/useConversationDetail"
 import { useConversationActions } from "./hooks/useConversationActions"
 import { useKeyboardShortcuts } from "./hooks/useKeyboardShortcuts"
+import { useConversations } from "../../lib/conversations-context"
 import Logo from "@/components/ui/Logo"
 import { WidgetActions, WidgetState } from "@/lib/types/widgets"
 import { cn } from "@/lib/utils/utils"
@@ -68,6 +68,56 @@ export default function ConversationDetailPage() {
     isToolboxOpen, setIsToolboxOpen
   } = conversationDetail;
 
+  // Get refresh function from conversations context
+  const { refreshConversations } = useConversations();
+
+  // Debug logging for conversation data
+  useEffect(() => {
+    if (conversation) {
+      console.log('🔍 [ConversationDetailPage] Conversation data:', {
+        conversationId: conversation.thread.conversation_id,
+        messageCount: conversation.messages?.length || 0,
+        messages: conversation.messages?.map(m => ({
+          id: m.id,
+          type: m.type,
+          sender: m.sender_name,
+          body: m.body?.substring(0, 50) + '...',
+          timestamp: m.timestamp
+        }))
+      });
+    } else {
+      console.log('🔍 [ConversationDetailPage] No conversation data available');
+    }
+  }, [conversation]);
+
+  // Debug logging for signature when email preview modal opens
+  useEffect(() => {
+    if (showEmailPreviewModal) {
+      console.log('🔍 [ConversationPage] Passing signature to modal:', {
+        userSignature,
+        signatureLength: userSignature?.length || 0,
+        hasSignature: !!userSignature,
+        signaturePreview: userSignature?.substring(0, 100) + '...'
+      });
+    }
+  }, [showEmailPreviewModal, userSignature]);
+
+  // Refresh conversation data when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && conversation?.thread?.conversation_id) {
+        console.log('🔄 [ConversationDetailPage] Page became visible, refreshing conversation data...');
+        refreshConversations();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [conversation?.thread?.conversation_id, refreshConversations]);
+
   // Widget layout management
   const {
     widgets,
@@ -98,27 +148,46 @@ export default function ConversationDetailPage() {
   };
 
   const handleUseGeneratedResponse = () => {
-    conversationActions.handleUseGeneratedResponse(generatedResponse, setMessageInput, setShowGenerateModal);
+    conversationActions.handleUseGeneratedResponse(generatedResponse, setMessageInput, setShowGenerateModal, setShowEmailPreviewModal, setSendingEmail);
   };
 
   const handleGenerateAIResponse = async () => {
     console.log('🎯 handleGenerateAIResponse called with conversation:', conversation?.thread?.conversation_id);
+    
+    if (!conversation) {
+      console.error('❌ No conversation available for AI response generation');
+      alert('No conversation data available. Please refresh the page and try again.');
+      return;
+    }
+
     try {
       const response = await conversationActions.generateAIResponse(setGeneratingResponse, conversation);
       if (response) {
         setGeneratedResponse(response);
         setShowGenerateModal(true);
-        console.log('AI response generated and modal opened');
+        console.log('✅ AI response generated and modal opened');
       }
     } catch (error) {
-      console.error('Failed to generate AI response:', error);
+      console.error('❌ Failed to generate AI response:', error);
       // Show error to user - you might want to add a toast notification here
       alert('Failed to generate AI response. Please try again.');
     }
   };
 
-  const handleSendEmail = () => {
-    conversationActions.sendEmail(setSendingEmail, setShowEmailPreviewModal);
+  const handleSendEmail = async (emailData: { subject: string; body: string; signature: string }) => {
+    // Clear the message input immediately for better UX
+    setMessageInput('');
+    
+    // Send the email with the composed data
+    await conversationActions.sendEmail(setSendingEmail, setShowEmailPreviewModal, emailData.body);
+    
+    // Simple refresh after sending
+    console.log('🔄 Refreshing after email sent...');
+    console.log('Current conversation:', conversation?.thread?.conversation_id);
+    await refreshConversations();
+    console.log('Page refresh completed');
+    
+    console.log('✅ Email sent! UI should update...');
   };
 
   const handleFocusOverrideButton = () => {
@@ -235,6 +304,31 @@ export default function ConversationDetailPage() {
   const emailSubject = conversation?.thread?.subject || '';
   const isBusy = conversation?.thread?.busy || false;
 
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 [ConversationDetailPage] Debug Info:', {
+      conversationId: conversation?.thread?.conversation_id,
+      isLoading,
+      widgetsLoading,
+      hasConversation: !!conversation,
+      conversationData: conversation ? {
+        id: conversation.thread.conversation_id,
+        lead_name: conversation.thread.lead_name,
+        client_email: conversation.thread.client_email,
+        source_name: conversation.thread.source_name,
+        messagesCount: conversation.messages.length,
+        lastMessageAt: conversation.thread.lastMessageAt
+      } : null,
+      widgetsCount: widgets.length,
+      sampleWidget: widgets[0] ? {
+        id: widgets[0].id,
+        widgetId: widgets[0].widgetId,
+        isVisible: widgets[0].isVisible,
+        isFloating: widgets[0].isFloating
+      } : null
+    });
+  }, [conversation?.thread?.conversation_id, isLoading, widgetsLoading, conversation, widgets]);
+
   // Widget actions and state
   const widgetActions: WidgetActions = {
     onCall: handleCall,
@@ -285,6 +379,26 @@ export default function ConversationDetailPage() {
     return <LoadingSkeleton />;
   }
 
+  // Show error state if conversation not found
+  if (!isLoading && !conversation) {
+    return (
+      <div className="flex flex-col h-full max-h-full bg-muted/30 items-center justify-center">
+        <div className="text-center p-8">
+          <h2 className="text-2xl font-semibold text-foreground mb-4">Conversation Not Found</h2>
+          <p className="text-muted-foreground mb-6">
+            The conversation you're looking for doesn't exist or may have been deleted.
+          </p>
+          <button
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full max-h-full bg-muted/30" data-dashboard-layout>
       {/* Modals */}
@@ -318,12 +432,14 @@ export default function ConversationDetailPage() {
         session={session}
         responseEmail={userResponseEmail}
         modalId={`email-preview-modal-${conversation?.thread.conversation_id}`}
+        onGenerateAIResponse={handleGenerateAIResponse}
+        isGeneratingAI={generatingResponse}
+        aiGeneratedContent={generatedResponse}
       />
       <FlaggedNotificationModal
         isOpen={showFlaggedNotification}
         onClose={() => setShowFlaggedNotification(false)}
         onFocusOverrideButton={handleFocusOverrideButton}
-        modalId={`flagged-notification-modal-${conversation?.thread.conversation_id}`}
       />
       <CompletionModal
         isOpen={showCompletionModal}
@@ -349,40 +465,40 @@ export default function ConversationDetailPage() {
         />
       ))}
 
-      {/* Fixed Header - Google Docs Style */}
+      {/* Fixed Header - Responsive Design */}
       <header className="flex-shrink-0 bg-card border-b border-border shadow-sm">
-        <div className="w-full max-w-[1600px] mx-auto px-4 lg:px-6 py-3">
-          <div className="flex items-center gap-2 lg:gap-4">
-            <Logo size="md" variant="icon-only" />
+        <div className="w-full px-2 sm:px-3 lg:px-4 py-2 lg:py-3">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <Logo size="sm" variant="icon-only" className="flex-shrink-0" />
             <button
               onClick={() => router.back()}
-              className="p-2 hover:bg-muted rounded-lg transition-colors"
+              className="p-1 lg:p-2 hover:bg-muted rounded-lg transition-colors flex-shrink-0"
               title="Go back"
             >
-              <ArrowLeft className="h-5 w-5 text-foreground" />
+              <ArrowLeft className="h-4 w-4 lg:h-5 lg:w-5 text-foreground" />
             </button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-base lg:text-lg font-medium text-foreground truncate">Conversation Detail</h1>
-              <p className="text-xs lg:text-sm text-muted-foreground truncate">with {leadName}</p>
+              <h1 className="text-sm lg:text-base font-medium text-foreground truncate">Conversation Detail</h1>
+              <p className="text-xs text-muted-foreground truncate">with {leadName}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 lg:gap-2 flex-shrink-0">
               <button
                 onClick={showKeyboardShortcuts}
-                className="p-2 hover:bg-muted rounded-lg transition-colors"
+                className="p-1 lg:p-2 hover:bg-muted rounded-lg transition-colors"
                 title="Keyboard shortcuts (Ctrl + ?)"
               >
-                <HelpCircle className="w-5 h-5 text-muted-foreground" />
+                <HelpCircle className="w-4 h-4 lg:w-5 lg:h-5 text-muted-foreground" />
               </button>
             </div>
           </div>
         </div>
       </header>
 
-      {/* Main Content Area - Google Docs Style */}
-      <div className="flex-1 w-full max-w-[1600px] mx-auto flex flex-col lg:flex-row gap-4 lg:gap-6 min-h-0 overflow-hidden p-4 lg:p-6">
+      {/* Main Content Area - Improved Responsive Layout */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-2 lg:gap-4 min-h-0 overflow-hidden p-2 lg:p-4">
         {/* Left Sidebar - Single Column Widget System */}
-        <div className="w-full lg:w-1/3 lg:min-w-[320px] lg:max-w-[400px] flex flex-col order-2 lg:order-1">
-          <div className="flex-1 min-h-0">
+        <div className="w-full lg:w-72 xl:w-80 lg:min-w-[280px] lg:max-w-[320px] flex flex-col order-2 lg:order-1">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <SingleColumnWidgetLayout
               widgets={widgets.filter(w => w.isVisible)}
               conversation={conversation || null}
@@ -402,14 +518,14 @@ export default function ConversationDetailPage() {
         <div 
           className={cn(
             "fixed top-0 w-1 bg-primary/20 pointer-events-none transition-opacity duration-300 z-40",
-            "lg:left-[33.333%] md:left-[40%] left-[50%]",
+            "lg:left-[280px] xl:left-[320px] md:left-[280px] left-[50%]",
             widgets.some(w => w.isFloating) ? "opacity-30" : "opacity-0"
           )}
           style={{ height: '100vh' }}
         />
 
-        {/* Center Chat Area - Google Docs Style */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-card border-2 border-border/60 rounded-xl shadow-lg overflow-hidden order-1 lg:order-2">
+        {/* Center Chat Area - Flexible Layout */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 bg-card border border-border/60 rounded-xl shadow-sm overflow-hidden order-1 lg:order-2">
           {/* Message Toolbar */}
           <MessageToolbar
             searchQuery={searchQuery}
@@ -421,10 +537,20 @@ export default function ConversationDetailPage() {
             onRemoveWidget={removeWidget}
             onToggleWidgetVisibility={toggleWidgetVisibility}
             searchInputRef={searchInputRef}
+            // AI Toolbar props
+            onGenerateResponse={handleGenerateAIResponse}
+            onSendEmail={handleOpenEmailPreview}
+            onOpenGenerateModal={() => setShowGenerateModal(true)}
+            generatingResponse={generatingResponse}
+            isBusy={isBusy}
+            isFlagged={isResponseFlagged}
+            overrideEnabled={false}
+            onOverrideToggle={handleOverride}
+            updatingOverride={updatingOverride}
           />
 
           {/* Message List */}
-          <div className="flex-1 min-h-0">
+          <div className="flex-1 min-h-0 overflow-hidden">
             <MessageList
               conversation={conversation || null}
               feedback={feedback}
@@ -438,21 +564,9 @@ export default function ConversationDetailPage() {
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               onJumpToUnread={handleJumpToUnread}
+              className="h-full"
             />
           </div>
-
-          {/* AI Toolbar */}
-          <AIToolbar
-            onGenerateResponse={handleGenerateAIResponse}
-            onSendEmail={handleOpenEmailPreview}
-            onOpenGenerateModal={() => setShowGenerateModal(true)}
-            generatingResponse={generatingResponse}
-            isBusy={isBusy}
-            isFlagged={isResponseFlagged}
-            overrideEnabled={false}
-            onOverrideToggle={handleOverride}
-            updatingOverride={updatingOverride}
-          />
         </div>
       </div>
 
@@ -463,6 +577,8 @@ export default function ConversationDetailPage() {
           onClose={() => setIsToolboxOpen(false)}
           currentWidgets={widgets}
           onAddWidget={addWidget}
+          onRemoveWidget={removeWidget}
+          onToggleWidgetVisibility={toggleWidgetVisibility}
           modalId={`widget-toolbox-modal-${conversation?.thread.conversation_id}`}
         />
       )}

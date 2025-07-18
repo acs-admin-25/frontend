@@ -12,18 +12,7 @@ interface SendMessageSectionProps {
   onReset?: () => void;
 }
 
-/**
- * SendMessageSection Component
- * Displays the contact form with validation and submission handling
- * 
- * @param variants - Framer Motion variants for animations
- * @param onReset - Optional callback to reset the form
- * @returns {JSX.Element} Send message section component
- */
-export function SendMessageSection({
-  variants,
-  onReset
-}: SendMessageSectionProps) {
+export function SendMessageSection({ variants, onReset }: SendMessageSectionProps) {
   const {
     formData,
     isSubmitting,
@@ -35,17 +24,16 @@ export function SendMessageSection({
     resetForm,
   } = useSendMessage();
 
-  // Handle form field changes
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLInputElement>) => {
-    const { name, value, type } = e.target;
-    updateField(name as keyof ContactMessageData, type === "checkbox" ? ("checked" in e.target ? e.target.checked : false) : value);
+    const { name, value } = e.target;
+    updateField(name as keyof ContactMessageData, value);
   };
 
-  // Handle form reset
   const handleFormReset = () => {
     resetForm();
     onReset?.();
   };
+
   return (
     <motion.div className="md:col-span-7 lg:col-span-8" variants={variants}>
       <div className="rounded-xl bg-card p-4 sm:p-8 shadow-lg">
@@ -144,7 +132,6 @@ export function SendMessageSection({
                   placeholder="Enter your message"
                 />
               </div>
-              {/* Request a demo removed */}
               {apiError && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
@@ -176,4 +163,4 @@ export function SendMessageSection({
       </div>
     </motion.div>
   );
-} 
+}

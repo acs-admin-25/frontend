@@ -2,7 +2,7 @@ import { useMemo, useEffect, useRef } from 'react';
 import { useApi } from '@/lib/hooks/useApi';
 import { useSession } from 'next-auth/react';
 import type { Session } from 'next-auth';
-import type { Conversation, Message, Thread } from '@/types/conversation';
+import type { Conversation, Message, Thread, EVScoreHistory } from '@/lib/types/conversation';
 import { ensureLocalDate, safeParseDate, compareDates } from '@/lib/utils/date';
 
 /**
@@ -317,6 +317,48 @@ function processMessage(msg: any, conversationId: string): Message {
   const recipient = msg.recipient || msg.receiver || msg.to || msg.receiver_email || '';
   const senderName = msg.sender_name || msg.from_name || sender.split('@')[0] || 'Unknown';
   
+  // Process EV score with enhanced dynamic scoring support
+  const evScore = typeof msg.ev_score === 'string' ? parseFloat(msg.ev_score) : msg.ev_score;
+  
+  // Initialize EV score history if not present
+  let evScores: EVScoreHistory[] = [];
+  if (msg.ev_scores && Array.isArray(msg.ev_scores)) {
+    evScores = msg.ev_scores.map((scoreEntry: any) => ({
+      score: typeof scoreEntry.score === 'string' ? parseFloat(scoreEntry.score) : scoreEntry.score,
+      timestamp: scoreEntry.timestamp || timestamp,
+      reason: scoreEntry.reason,
+      confidence: scoreEntry.confidence,
+      factors: scoreEntry.factors
+    }));
+  } else if (evScore !== undefined && evScore !== null && !isNaN(evScore)) {
+    // Create initial score entry if we have a score but no history
+    evScores = [{
+      score: evScore,
+      timestamp: timestamp,
+      reason: 'initial_analysis',
+      confidence: 0.8,
+      factors: ['initial_ai_analysis']
+    }];
+  }
+  
+  // Determine current and initial scores
+  const evScoreCurrent = evScores.length > 0 ? evScores[evScores.length - 1].score : evScore;
+  const evScoreInitial = evScores.length > 0 ? evScores[0].score : evScore;
+  
+  // Determine score status
+  let evScoreStatus: 'initial' | 'updating' | 'stable' | 'improving' | 'declining' = 'initial';
+  if (evScores.length > 1) {
+    const latestScore = evScores[evScores.length - 1].score;
+    const previousScore = evScores[evScores.length - 2].score;
+    if (latestScore > previousScore) {
+      evScoreStatus = 'improving';
+    } else if (latestScore < previousScore) {
+      evScoreStatus = 'declining';
+    } else {
+      evScoreStatus = 'stable';
+    }
+  }
+  
   return {
     id: msg.id || msg.response_id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     conversation_id: msg.conversation_id || conversationId,
@@ -333,7 +375,15 @@ function processMessage(msg: any, conversationId: string): Message {
     localDate: localDate, // Always a valid Date object
     type: msg.type || 'inbound-email',
     read: msg.read === true,
-    ev_score: typeof msg.ev_score === 'string' ? parseFloat(msg.ev_score) : msg.ev_score,
+    
+    // Enhanced EV scoring
+    ev_score: evScore, // Backward compatibility
+    ev_scores: evScores,
+    ev_score_current: evScoreCurrent,
+    ev_score_initial: evScoreInitial,
+    ev_score_updated_at: evScores.length > 0 ? evScores[evScores.length - 1].timestamp : timestamp,
+    ev_score_status: evScoreStatus,
+    
     associated_account: msg.associated_account || msg.sender,
     in_reply_to: msg.in_reply_to || null,
     is_first_email: msg.is_first_email === true,

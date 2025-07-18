@@ -11,7 +11,7 @@ interface EmailSignatureSettingsProps {
 
 export function EmailSignatureSettings({ userData, onSave }: EmailSignatureSettingsProps) {
     const [form, setForm] = useState({ 
-        emailSignature: '',
+        email_signature: '',
         includeLogo: true,
         includeSocialLinks: true
     });
@@ -23,7 +23,7 @@ export function EmailSignatureSettings({ userData, onSave }: EmailSignatureSetti
     useEffect(() => {
         if (userData) {
             setForm({
-                emailSignature: userData.emailSignature || '',
+                email_signature: userData.email_signature || '',
                 includeLogo: userData.includeLogo !== false,
                 includeSocialLinks: userData.includeSocialLinks !== false
             });
@@ -64,7 +64,7 @@ export function EmailSignatureSettings({ userData, onSave }: EmailSignatureSetti
     };
 
     const generatePreviewSignature = () => {
-        let signature = form.emailSignature;
+        let signature = form.email_signature;
         
         if (form.includeLogo) {
             signature = `[ACS Logo]\n${signature}`;
@@ -91,13 +91,13 @@ export function EmailSignatureSettings({ userData, onSave }: EmailSignatureSetti
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="space-y-4">
                         <div>
-                            <label htmlFor="emailSignature" className="block text-sm font-medium text-card-foreground mb-2">
+                            <label htmlFor="email_signature" className="block text-sm font-medium text-card-foreground mb-2">
                                 Email Signature Content
                             </label>
                             <textarea 
-                                name="emailSignature" 
-                                id="emailSignature" 
-                                value={form.emailSignature} 
+                                name="email_signature" 
+                                id="email_signature" 
+                                value={form.email_signature} 
                                 onChange={handleChange}
                                 rows={6}
                                 className={cn(
@@ -113,7 +113,7 @@ Phone: (555) 123-4567
 Email: john.doe@acsrealestate.com`}
                             />
                             <p className="text-xs text-muted-foreground mt-1">
-                                {form.emailSignature.length}/1000 characters
+                                {form.email_signature.length}/1000 characters
                             </p>
                         </div>
                         

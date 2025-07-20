@@ -44,8 +44,22 @@ import type {
   CalendarFilters
 } from "@/lib/types/calendar"
 import { CalendarIntegration } from "../CalendarIntegration"
+import type { CalendarEvent } from '@/lib/types/calendar';
 
 export default function CalendarContent() {
+  // Store Outlook access token from URL in sessionStorage (for client-side fetch)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('outlook_access_token');
+    if (token) {
+      sessionStorage.setItem('outlookAccessToken', token);
+      // Clean up the URL
+      params.delete('outlook_access_token');
+      const newUrl = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, []);
+
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedDate, setSelectedDate] = useState("")
@@ -57,6 +71,7 @@ export default function CalendarContent() {
   const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlot | null>(null)
   const [activeTab, setActiveTab] = useState('calendar')
   const [filters, setFilters] = useState<CalendarFilters>({})
+  const [clientOutlookEvents, setClientOutlookEvents] = useState<CalendarEvent[]>([]);
 
   // Use the centralized calendar data hook
   const {
@@ -78,8 +93,11 @@ export default function CalendarContent() {
     filters
   })
 
+  // For now, use only Outlook events for display
+  const eventsToDisplay: CalendarEvent[] = clientOutlookEvents;
+
   // Filter events based on search term
-  const filteredEvents = events.filter(
+  const filteredEvents = eventsToDisplay.filter(
     (event) =>
       event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -92,7 +110,7 @@ export default function CalendarContent() {
     const currentMonth = now.getMonth()
     const currentYear = now.getFullYear()
     
-    return events.filter(event => {
+    return eventsToDisplay.filter(event => {
       const eventDate = new Date(event.startTime)
       return eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear
     })
@@ -105,7 +123,7 @@ export default function CalendarContent() {
     const now = new Date()
     const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
     
-    return events.filter(event => {
+    return eventsToDisplay.filter(event => {
       const eventDate = new Date(event.startTime)
       return eventDate >= now && eventDate <= nextWeek
     }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
@@ -119,7 +137,7 @@ export default function CalendarContent() {
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
     const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
     
-    return events.filter(event => {
+    return eventsToDisplay.filter(event => {
       const eventDate = new Date(event.startTime)
       return eventDate >= todayStart && eventDate < todayEnd
     }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
@@ -409,7 +427,7 @@ export default function CalendarContent() {
             </TabsContent>
 
             <TabsContent value="integrations" className="h-full p-6 overflow-auto">
-              <CalendarIntegration />
+              <CalendarIntegration setClientOutlookEvents={setClientOutlookEvents} />
             </TabsContent>
 
             <TabsContent value="ai-scheduling" className="h-full p-6 overflow-auto">
@@ -417,7 +435,7 @@ export default function CalendarContent() {
             </TabsContent>
 
             <TabsContent value="analytics" className="h-full p-6 overflow-auto">
-              <CalendarAnalytics events={events} stats={stats} />
+              <CalendarAnalytics events={eventsToDisplay} stats={stats} />
             </TabsContent>
           </Tabs>
         </div>

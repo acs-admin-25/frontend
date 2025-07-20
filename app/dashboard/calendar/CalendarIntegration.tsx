@@ -1,19 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useCalendarData } from '@/lib/hooks/useCalendarData';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
 import { ErrorBoundary } from '@/components/common/Feedback/ErrorBoundary';
-import type { CalendarEvent, EventSource } from '@/types/calendar';
 
 interface CalendarIntegrationProps {
   className?: string;
+  setClientOutlookEvents?: (events: any[]) => void;
 }
 
-export function CalendarIntegration({ className }: CalendarIntegrationProps) {
+export function CalendarIntegration(props: CalendarIntegrationProps) {
+  const { className, setClientOutlookEvents } = props;
   const [googleAuthUrl, setGoogleAuthUrl] = useState<string>('');
   const [isConnectingGoogle, setIsConnectingGoogle] = useState(false);
   const [isConnectingCalendly, setIsConnectingCalendly] = useState(false);
+  const [isConnectingOutlook, setIsConnectingOutlook] = useState(false);
+  const [outlookEvents, setOutlookEvents] = useState<any[]>([]);
+  const [outlookConnectionStatus, setOutlookConnectionStatus] = useState<{
+    isConnected: boolean;
+    integration: any;
+  }>({ isConnected: false, integration: null });
 
   const {
     events,
@@ -32,6 +39,69 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
     enableGoogle: true,
     enableCalendly: true
   });
+
+  // Load Outlook connection status and events
+  useEffect(() => {
+    loadOutlookStatus();
+  }, []);
+
+  // After OAuth callback, store access token in sessionStorage (in callback page or useEffect)
+  useEffect(() => {
+    // Check for access token in URL or window object (if you pass it from callback)
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('outlook_access_token');
+    if (token) {
+      sessionStorage.setItem('outlookAccessToken', token);
+    }
+  }, []);
+
+  const loadOutlookStatus = async () => {
+    try {
+      const response = await fetch('/api/calendar/outlook/connection');
+      const result = await response.json();
+      
+      if (result.success) {
+        setOutlookConnectionStatus({
+          isConnected: result.data.isConnected,
+          integration: result.data.integration
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load Outlook status:', error);
+    }
+  };
+
+  const loadOutlookEvents = async () => {
+    try {
+      const response = await fetch('/api/calendar/outlook?events=true');
+      const result = await response.json();
+      
+      if (result.success && result.data.events) {
+        setOutlookEvents(result.data.events);
+      }
+    } catch (error) {
+      console.error('Failed to load Outlook events:', error);
+    }
+  };
+
+  const refreshOutlookEvents = async () => {
+    try {
+      const response = await fetch('/api/calendar/outlook/sync', {
+        method: 'POST'
+      });
+      const result = await response.json();
+      
+      if (result.success) {
+        console.log('Outlook events synced:', result.data);
+        await loadOutlookEvents();
+        await loadOutlookStatus();
+      } else {
+        console.error('Failed to sync Outlook events:', result.error);
+      }
+    } catch (error) {
+      console.error('Failed to refresh Outlook events:', error);
+    }
+  };
 
   const handleConnectGoogle = async () => {
     setIsConnectingGoogle(true);
@@ -84,8 +154,28 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
     }
   };
 
+  const handleConnectOutlook = async () => {
+    setIsConnectingOutlook(true);
+    try {
+      // Get Outlook OAuth URL from API
+      const response = await fetch('/api/calendar/outlook/auth-url');
+      const result = await response.json();
+      
+      if (result.success && result.data?.authUrl) {
+        // Redirect to Outlook OAuth
+        window.location.href = result.data.authUrl;
+      } else {
+        throw new Error('Failed to get Outlook auth URL');
+      }
+    } catch (error) {
+      console.error('Failed to generate Outlook auth URL:', error);
+    } finally {
+      setIsConnectingOutlook(false);
+    }
+  };
+
   const handleCreateEvent = async () => {
-    const newEvent: Partial<CalendarEvent> = {
+    const newEvent: any = {
       title: 'Test Event',
       description: 'This is a test event created from the calendar integration',
       startTime: new Date(Date.now() + 24 * 60 * 60 * 1000), // Tomorrow
@@ -95,12 +185,59 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
       attendees: ['test@example.com'],
       type: 'meeting',
       status: 'scheduled',
-      source: 'google-calendar' as EventSource
+      source: 'google-calendar'
     };
 
     const createdEvent = await createEvent(newEvent);
     if (createdEvent) {
       console.log('Event created:', createdEvent);
+    }
+  };
+
+  // Helper to fetch events from Microsoft Graph API
+  async function fetchOutlookEventsClient(accessToken: string) {
+    const startTime = new Date();
+    startTime.setDate(startTime.getDate() - 30);
+    const endTime = new Date();
+    endTime.setDate(endTime.getDate() + 90);
+    const url = `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${startTime.toISOString()}&endDateTime=${endTime.toISOString()}`;
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) throw new Error('Failed to fetch Outlook events');
+    const data = await response.json();
+    return (data.value || []).map((event: any) => ({
+      id: event.id,
+      title: event.subject || 'Untitled Event',
+      description: event.body?.content || '',
+      startTime: event.start?.dateTime ? new Date(event.start.dateTime) : null,
+      endTime: event.end?.dateTime ? new Date(event.end.dateTime) : null,
+      allDay: event.isAllDay || false,
+      location: event.location?.displayName || '',
+      attendees: event.attendees?.map((a: any) => a.emailAddress?.address).filter(Boolean) || [],
+      type: 'meeting',
+      status: 'scheduled',
+      source: 'outlook-calendar',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }));
+  }
+
+  const fetchAndDisplayOutlookEvents = async () => {
+    const accessToken = sessionStorage.getItem('outlookAccessToken');
+    if (!accessToken) {
+      alert('No Outlook access token found. Please connect Outlook first.');
+      return;
+    }
+    try {
+      const events = await fetchOutlookEventsClient(accessToken);
+      if (setClientOutlookEvents) setClientOutlookEvents(events);
+      alert(`Fetched ${events.length} Outlook events!`);
+    } catch (err) {
+      alert('Failed to fetch Outlook events: ' + err);
     }
   };
 
@@ -199,6 +336,37 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
                 )}
               </div>
             </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-medium">Outlook Calendar</h4>
+                <p className="text-sm text-gray-600">
+                  {outlookConnectionStatus.isConnected 
+                    ? `Connected (${outlookEvents.length} events)` 
+                    : 'Not connected'
+                  }
+                </p>
+              </div>
+              <div className="space-x-2">
+                <Button
+                  onClick={handleConnectOutlook}
+                  disabled={isConnectingOutlook}
+                  variant="outline"
+                  size="sm"
+                >
+                  {isConnectingOutlook ? 'Connecting...' : 'Connect'}
+                </Button>
+                {outlookConnectionStatus.isConnected && (
+                  <Button
+                    onClick={refreshOutlookEvents}
+                    variant="outline"
+                    size="sm"
+                  >
+                    Refresh
+                  </Button>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -248,11 +416,11 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
             <CardTitle>Recent Events</CardTitle>
           </CardHeader>
           <CardContent>
-            {events.length === 0 ? (
+            {events.length === 0 && outlookEvents.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No events found</p>
             ) : (
               <div className="space-y-3">
-                {events.slice(0, 5).map((event) => (
+                {[...events, ...outlookEvents].slice(0, 5).map((event) => (
                   <div
                     key={event.id}
                     className="flex items-center justify-between p-3 border rounded-lg"
@@ -294,6 +462,9 @@ export function CalendarIntegration({ className }: CalendarIntegrationProps) {
             </Button>
             <Button onClick={refetch} variant="outline" size="sm">
               Refresh All Data
+            </Button>
+            <Button onClick={fetchAndDisplayOutlookEvents} variant="outline" size="sm">
+              Fetch Outlook Events (Client)
             </Button>
           </CardContent>
         </Card>

@@ -4,78 +4,114 @@ import { config } from '@/lib/config/local-api-config';
 
 export async function POST(request: Request) {
     try {
+        console.log('🔍 LOGIN API - Starting request...');
+        
         const body = await request.json();
         const {email, password, name, provider} = body;
+        
+        console.log('📝 LOGIN API - Request body:', { email, provider, name: name ? 'provided' : 'missing' });
 
         if (provider === 'form' && !password) {
+            console.log('❌ LOGIN API - Missing password for form login');
             return NextResponse.json({ error: 'Password is required for form-based login.' }, { status: 400 });
         }
         
         // if provider is google, there needs to be a name field in the body
         if (provider === 'google' && (!name || name.trim() === '')) {
+            console.log('❌ LOGIN API - Missing name for google login');
             return NextResponse.json({ error: 'Name is required for google login.' }, { status: 400 });
         }
         
+        console.log('🚀 LOGIN API - Calling Cloud Function:', config.LOGIN_FUNCTION);
+        console.log('📤 LOGIN API - Request payload:', { email, password: '***', provider, name });
 
-        const response = await fetch(config.API_URL + `/users/auth/login`, {
+        // Call Google Cloud Function directly
+        // Backend expects only email and password
+        const response = await fetch(config.LOGIN_FUNCTION, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, provider, name }),
-            credentials: 'include',
+            body: JSON.stringify({ email, password }),
         });
 
-        const data = await response.json();
+        console.log('📥 LOGIN API - Response status:', response.status);
+        console.log('📥 LOGIN API - Response headers:', Object.fromEntries(response.headers.entries()));
+
+        const responseText = await response.text();
+        console.log('📥 LOGIN API - Response text:', responseText.substring(0, 500));
+        
+        let data;
+        try {
+            data = JSON.parse(responseText);
+            console.log('📥 LOGIN API - Response data:', data);
+        } catch (parseError) {
+            console.error('❌ LOGIN API - Failed to parse JSON response:', parseError);
+            console.error('❌ LOGIN API - Raw response:', responseText);
+            return NextResponse.json({ 
+                error: 'Invalid response from Cloud Function',
+                details: 'Response was not valid JSON'
+            }, { status: 500 });
+        }
 
         if (!response.ok) {
-            return NextResponse.json({ error: 'Login failed.' }, { status: response.status });
+            console.log('❌ LOGIN API - Cloud Function returned error status:', response.status);
+            console.log('❌ LOGIN API - Error response:', data);
+            return NextResponse.json({ 
+                error: 'Login failed.',
+                details: data?.error || 'Unknown error',
+                status: response.status
+            }, { status: response.status });
         }
 
-        // Get the session cookie from the API response
-        const setCookieHeader = response.headers.get('set-cookie');
-
-        // Extract session_id from the cookie header
-        let sessionId = null;
-        if (setCookieHeader) {
-            const sessionIdMatch = setCookieHeader.match(/session_id=([^;,\s]+)/);
-            if (sessionIdMatch?.[1]) {
-                sessionId = sessionIdMatch[1];
-            }
-        }
-
-        // Compose user fields for the frontend
+        console.log('✅ LOGIN API - Cloud Function returned success!');
+        
+        // Cloud Functions return JWT token in response body
         const user = {
-            id: data.id || data._id,
+            id: data.user?.user_id || data.user?.id || data.id,
             email: email,
-            name: data.name || data.user?.name || name,
-            authType: data.authType || data.authType || data.authtype || 'existing',
+            name: data.user?.name || data.name || name,
+            authType: data.user?.authType || data.authType || 'existing',
             provider: provider || 'form',
         };
+        
+        console.log('👤 LOGIN API - Processed user data:', { 
+            id: user.id, 
+            email: user.email, 
+            name: user.name,
+            authType: user.authType,
+            provider: user.provider 
+        });
         
         const nextResponse = NextResponse.json({
             success: true,
             message: 'Login successful!',
             user,
-            sessionId, // Include session_id in response body
+            token: data.token, // JWT token from Cloud Function
         }, { status: 200 });
 
-        // Handle the session_id cookie from the API response
-        if (setCookieHeader) {
-            // Forward all cookies if there are multiple
-            setCookieHeader.split(',').forEach(cookie => {
-                let cookieToSet = cookie.trim();
-                if (process.env.NODE_ENV !== 'production') {
-                    // Remove Secure attribute for local development
-                    cookieToSet = cookieToSet.replace(/; ?secure/gi, '');
-                }
-                nextResponse.headers.append('set-cookie', cookieToSet);
+        // Set JWT token as httpOnly cookie
+        if (data.token) {
+            console.log('🍪 LOGIN API - Setting JWT token cookie');
+            nextResponse.cookies.set('auth-token', data.token, {
+                httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'lax',
+                maxAge: 24 * 60 * 60 // 24 hours
             });
+        } else {
+            console.log('⚠️ LOGIN API - No JWT token in response');
         }
 
+        console.log('✅ LOGIN API - Returning success response');
         return nextResponse;
 
     } catch (error: any) {
         // Keep error logging for debugging purposes
-        console.error("Login API - Error:", error);
-        return NextResponse.json({ error: 'An unexpected error occurred during login.' }, { status: 500 });
+        console.error("💥 LOGIN API - Unexpected error:", error);
+        console.error("💥 LOGIN API - Error stack:", error.stack);
+        console.error("💥 LOGIN API - Error message:", error.message);
+        return NextResponse.json({ 
+            error: 'An unexpected error occurred during login.',
+            details: error.message
+        }, { status: 500 });
     }
 }

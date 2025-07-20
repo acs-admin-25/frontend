@@ -2,7 +2,7 @@ import { JWT } from "next-auth/jwt";
 import Google from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { config } from '@/lib/config/local-api-config';
-import type { Credentials, SignupProvider, User, AuthType, LoginResponse } from '@/types/auth';
+import type { Credentials, SignupProvider, User, AuthType, LoginResponse } from '@/lib/types/auth';
 import { serverApiClient } from "@/lib/api/client";
 
 export const authOptions = {
@@ -67,38 +67,53 @@ export const authOptions = {
 
   callbacks: {
     async signIn({ user, account }: any) {
+      console.log('🔍 NextAuth signIn callback - Starting...');
+      console.log('🔍 NextAuth signIn callback - User:', { email: user?.email, name: user?.name });
+      console.log('🔍 NextAuth signIn callback - Account:', { provider: account?.provider, type: account?.type });
+      
       const appUser = user as User;
       
       if (account?.provider === "credentials") {
+        console.log('✅ NextAuth signIn callback - Credentials provider, returning true');
         return true;
       }
       
       if (account?.provider === "google") {
+        console.log('🔍 NextAuth signIn callback - Google provider detected');
         appUser.provider = 'google';
         if (account.access_token) {
             appUser.accessToken = account.access_token;
         }
 
         try {
+          console.log('🔍 NextAuth Google - Starting authentication for:', appUser.email);
+          
           // First, try to login with the Google user
+          // Backend expects only email and password for login
           const loginData = {
             email: appUser.email,
-            password: "",
-            provider: 'google' as SignupProvider,
-            name: appUser.name
+            password: "" // Google users don't have passwords
           };
 
-          const loginResponse = await serverApiClient.login(loginData);
+          console.log('🚀 NextAuth Google - Calling Cloud Function for login');
+          const loginResponse = await fetch(config.LOGIN_FUNCTION, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(loginData)
+          });
 
-          if (loginResponse.success && loginResponse.data) {
+          const loginResponseData = await loginResponse.json();
+          console.log('📥 NextAuth Google - Login response:', { status: loginResponse.status, data: loginResponseData });
+
+          if (loginResponse.ok && loginResponseData.success && loginResponseData.data) {
             // User exists, set authType and return true
-            appUser.authType = loginResponse.data.user?.authType || loginResponse.data.authType || 'existing';
-            appUser.id = loginResponse.data.user?.id || loginResponse.data.user?.id || '';
+            appUser.authType = loginResponseData.data.user?.authType || loginResponseData.data.authType || 'existing';
+            appUser.id = loginResponseData.data.user?.id || loginResponseData.data.user?.id || '';
             appUser.accessToken = account.access_token;
             
             // Extract session_id from the response if available
-            if (loginResponse.data.sessionId) {
-              (appUser as any).sessionId = loginResponse.data.sessionId;
+            if (loginResponseData.data.sessionId) {
+              (appUser as any).sessionId = loginResponseData.data.sessionId;
             }
             
             return true;
@@ -107,39 +122,60 @@ export const authOptions = {
           // If login fails (user doesn't exist), try to sign up
           console.log('User not found, attempting signup...');
           
-          // Use the full name for signup
+          // Parse name into first_name and last_name for backend
+          const nameParts = appUser.name?.trim().split(' ') || [];
+          const first_name = nameParts[0] || '';
+          const last_name = nameParts.slice(1).join(' ') || '';
+          
+          // Backend expects: email, password, first_name, last_name, phone_number?, organization?
           const signupData = {
-            name: appUser.name,
             email: appUser.email,
-            provider: 'google' as SignupProvider,
-            captchaToken: '' // this is empty because we don't need it for google signup
+            password: '', // Google users don't have passwords
+            first_name,
+            last_name,
+            phone_number: undefined,
+            organization: undefined
           };
 
-          const signupResponse = await serverApiClient.signup(signupData);
+          console.log('🚀 NextAuth Google - Calling Cloud Function for signup');
+          const signupResponse = await fetch(config.SIGNUP_FUNCTION, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(signupData)
+          });
+
+          const signupResponseData = await signupResponse.json();
+          console.log('📥 NextAuth Google - Signup response:', { status: signupResponse.status, data: signupResponseData });
           
-          if (signupResponse.success && signupResponse.data) {
+          if (signupResponse.ok && signupResponseData.success && signupResponseData.data) {
             // Signup successful
-            appUser.authType = signupResponse.data.user?.authType || 'new';
-            appUser.id = signupResponse.data.user?.id || '';
+            appUser.authType = signupResponseData.data.user?.authType || 'new';
+            appUser.id = signupResponseData.data.user?.id || '';
             
             // Extract session_id from the response if available
-            if (signupResponse.data.sessionId) {
-              (appUser as any).sessionId = signupResponse.data.sessionId;
+            if (signupResponseData.data.sessionId) {
+              (appUser as any).sessionId = signupResponseData.data.sessionId;
             }
             
             return true;
           } else if (signupResponse.status === 409) {
             // User already exists (race condition), try login again
             console.log('User already exists, retrying login...');
-            const retryLoginResponse = await serverApiClient.login(loginData);
-            if (retryLoginResponse.success && retryLoginResponse.data) {
-              appUser.authType = retryLoginResponse.data.user?.authType || retryLoginResponse.data.authType || 'existing';
-              appUser.id = retryLoginResponse.data.user?.id || retryLoginResponse.data.user?.id || '';
+            const retryLoginResponse = await fetch(config.LOGIN_FUNCTION, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(loginData)
+            });
+            
+            const retryLoginResponseData = await retryLoginResponse.json();
+            if (retryLoginResponse.ok && retryLoginResponseData.success && retryLoginResponseData.data) {
+              appUser.authType = retryLoginResponseData.data.user?.authType || retryLoginResponseData.data.authType || 'existing';
+              appUser.id = retryLoginResponseData.data.user?.id || retryLoginResponseData.data.user?.id || '';
               appUser.accessToken = account.access_token;
               
               // Extract session_id from the response if available
-              if (retryLoginResponse.data.sessionId) {
-                (appUser as any).sessionId = retryLoginResponse.data.sessionId;
+              if (retryLoginResponseData.data.sessionId) {
+                (appUser as any).sessionId = retryLoginResponseData.data.sessionId;
               }
               
               return true;
@@ -147,23 +183,32 @@ export const authOptions = {
           }
 
           // If we get here, both login and signup failed
-          console.error('Google auth failed - login response:', loginResponse);
-          console.error('Google auth failed - signup response:', signupResponse);
+          console.error('Google auth failed - login response:', { status: loginResponse.status, data: loginResponseData });
+          console.error('Google auth failed - signup response:', { status: signupResponse.status, data: signupResponseData });
           return false;
           
-        } catch (err) {
-          console.error('NextAuth Google authentication error:', err);
+        } catch (err: any) {
+          console.error('💥 NextAuth Google authentication error:', err);
+          console.error('💥 NextAuth Google authentication error stack:', err.stack);
           return false;
         }
       }
+      console.log('✅ NextAuth signIn callback - Default case, returning true');
       return true;
     },
     
     async jwt({ token, user, account }: any) {
+        console.log('🔍 NextAuth JWT callback - Starting...');
+        console.log('🔍 NextAuth JWT callback - Token:', { id: token?.id, email: token?.email });
+        console.log('🔍 NextAuth JWT callback - User:', { id: user?.id, email: user?.email, name: user?.name });
+        console.log('🔍 NextAuth JWT callback - Account:', { provider: account?.provider, type: account?.type });
+        
         if (account) {
+            console.log('🔍 NextAuth JWT callback - Setting access token from account');
             token.accessToken = account.access_token;
         }
         if (user) {
+            console.log('🔍 NextAuth JWT callback - Processing user data');
             const appUser = user as User;
             token.id = appUser.id;
             token.email = appUser.email;
@@ -179,11 +224,16 @@ export const authOptions = {
                 token.sessionId = (appUser as any).sessionId;
             }
         }
+        console.log('🔍 NextAuth JWT callback - Final token:', { id: token?.id, email: token?.email, provider: token?.provider });
         return token;
     },
     
     async session({ session, token }: any) {
+        console.log('🔍 NextAuth session callback - Starting...');
+        console.log('🔍 NextAuth session callback - Token:', { id: token?.id, email: token?.email, provider: token?.provider });
+        
         if (session.user) {
+            console.log('🔍 NextAuth session callback - Processing session user');
             session.user.id = token.id;
             session.user.name = token.name as string;
             session.user.email = token.email as string;
@@ -194,6 +244,11 @@ export const authOptions = {
             if (token.sessionId) {
                 (session as any).sessionId = token.sessionId;
             }
+            console.log('🔍 NextAuth session callback - Final session user:', { 
+                id: session.user.id, 
+                email: session.user.email, 
+                provider: session.user.provider 
+            });
         }
         return session;
     }

@@ -25,6 +25,8 @@ export interface SignupData extends Credentials {
   captchaToken?: string;
   firstName?: string;
   lastName?: string;
+  phone_number?: string;
+  organization?: string;
 }
 
 // NextAuth specific types

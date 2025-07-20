@@ -14,6 +14,12 @@ export const config = {
     ? process.env.GOOGLE_CLIENT_SECRET_DEV
     : process.env.GOOGLE_CLIENT_SECRET_PROD,
   NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-  API_URL: process.env.NEXT_PUBLIC_API_GATEWAY_URL,
+  
+  // Google Cloud Functions URLs
+  API_URL: 'https://us-central1-acs-dev-464702.cloudfunctions.net',
+  LOGIN_FUNCTION: 'https://us-central1-acs-dev-464702.cloudfunctions.net/login-dev',
+  SIGNUP_FUNCTION: 'https://us-central1-acs-dev-464702.cloudfunctions.net/signup-dev',
+  AUTH_MIDDLEWARE: 'https://us-central1-acs-dev-464702.cloudfunctions.net/auth-middleware-dev',
+  
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY
 }; 

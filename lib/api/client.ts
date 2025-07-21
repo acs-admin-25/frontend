@@ -1,5 +1,6 @@
 import { handleApiError } from './errorHandling';
 import { conversationStorage } from '@/lib/utils/ConversationStorage';
+import { getStoredTokens, clearStoredTokens, isTokenExpired } from '@/lib/auth/auth-utils';
 import type { 
   ApiResponse, 
   RequestOptions, 
@@ -11,9 +12,10 @@ import type {
   DbDeleteResponse,
   ThreadFilters,
   ThreadUpdate,
-} from '@/types/api';
-import type { Thread, Conversation } from '@/types/conversation';
-import type { LCPEmailRequest } from '@/types/lcp';
+} from '../types/api';
+import type { Thread, Conversation } from '../types/conversation';
+import type { LCPEmailRequest } from '../types/lcp';
+import type { AuthTokens } from '../types/auth';
 
 // Retry configuration
 interface RetryConfig {
@@ -82,6 +84,63 @@ export class ApiClient {
   }
 
   /**
+   * Parse response data
+   */
+  private async parseResponse(response: Response): Promise<any> {
+    const contentType = response.headers.get('content-type');
+    const hasContent = contentType && contentType.includes('application/json');
+    
+    if (hasContent) {
+      try {
+        const responseText = await response.text();
+        if (responseText.trim()) {
+          return JSON.parse(responseText);
+        }
+      } catch (jsonError) {
+        console.error('JSON parsing error:', jsonError);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Refresh authentication token
+   */
+  private async refreshToken(): Promise<boolean> {
+    try {
+      const tokens = getStoredTokens();
+      if (!tokens?.refresh_token) {
+        return false;
+      }
+
+      const response = await fetch(`${this.baseURL}/api/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          refresh_token: tokens.refresh_token
+        }),
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await this.parseResponse(response);
+        if (data?.success && data?.data?.tokens) {
+          // Store new tokens
+          const { storeAuthTokens } = await import('@/lib/auth/auth-utils');
+          storeAuthTokens(data.data.tokens);
+          return true;
+        }
+      }
+      return false;
+    } catch (error) {
+      console.error('Token refresh error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Initialize the API client with user ID for storage operations
    */
   initialize(userId: string): void {
@@ -104,16 +163,25 @@ export class ApiClient {
       }
     }
 
+    // Get authentication token for backend API calls
+    const tokens = getStoredTokens();
+    const headers: Record<string, string> = {
+      ...this.defaultHeaders,
+      ...options.headers,
+    };
+
+    // Add authorization header if token exists and is not expired
+    if (tokens && !isTokenExpired() && !endpoint.includes('/auth/')) {
+      headers.Authorization = `Bearer ${tokens.access_token}`;
+    }
+
     let lastError: any = null;
     
     for (let attempt = 1; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
         const response = await fetch(url, {
           method: options.method || 'GET',
-          headers: {
-            ...this.defaultHeaders,
-            ...options.headers,
-          },
+          headers,
           body: options.body ? JSON.stringify(options.body) : undefined,
           credentials: 'include',
           // Add timeout for fetch
@@ -158,6 +226,52 @@ export class ApiClient {
         }
         
         if (!response.ok) {
+          // Handle token refresh on 401 errors
+          if (response.status === 401 && tokens && !endpoint.includes('/auth/refresh')) {
+            try {
+              // Try to refresh the token
+              const refreshResponse = await this.refreshToken();
+              if (refreshResponse) {
+                // Retry the original request with new token
+                const newTokens = getStoredTokens();
+                if (newTokens) {
+                  headers.Authorization = `Bearer ${newTokens.access_token}`;
+                  const retryResponse = await fetch(url, {
+                    method: options.method || 'GET',
+                    headers,
+                    body: options.body ? JSON.stringify(options.body) : undefined,
+                    credentials: 'include',
+                    signal: AbortSignal.timeout(30000)
+                  });
+                  
+                  if (retryResponse.ok) {
+                    const retryData = await this.parseResponse(retryResponse);
+                    const result: ApiResponse<T> = {
+                      success: true,
+                      data: retryData,
+                      status: retryResponse.status,
+                    };
+                    
+                    // Cache successful GET requests
+                    if (options.method === 'GET' || !options.method) {
+                      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+                    }
+                    
+                    return result;
+                  }
+                }
+              }
+            } catch (refreshError) {
+              console.error('Token refresh failed:', refreshError);
+              // Clear tokens and redirect to login
+              clearStoredTokens();
+              if (typeof window !== 'undefined') {
+                window.location.href = '/login';
+              }
+              throw new Error('Authentication required');
+            }
+          }
+          
           // Don't retry on authentication errors
           if (response.status === 401 || response.status === 403) {
             throw handleApiError({ status: response.status, data });
@@ -461,7 +575,20 @@ export class ApiClient {
       conversationStorage.clear();
       this.currentUserId = null;
     }
+    // Clear auth tokens
+    const { clearStoredTokens } = await import('@/lib/auth/auth-utils');
+    clearStoredTokens();
     return this.request('auth/logout', { method: 'POST' });
+  }
+
+  // Backend database operations
+  async dbBatchSelect(queries: Array<{
+    collection_name: string;
+    key_name: string;
+    key_value: string;
+    filters?: Record<string, any>;
+  }>): Promise<ApiResponse<any>> {
+    return this.request('api/db/batch-select', { method: 'POST', body: { queries } });
   }
 
   // Contact operations

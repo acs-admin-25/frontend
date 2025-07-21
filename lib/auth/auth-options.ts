@@ -4,6 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { config } from '@/lib/config/local-api-config';
 import type { Credentials, SignupProvider, User, AuthType, LoginResponse } from '@/lib/types/auth';
 import { serverApiClient } from "@/lib/api/client";
+import { convertBackendUserToNextAuthUser, convertNextAuthUserToBackendUser } from './auth-utils';
 
 export const authOptions = {
   providers: [
@@ -34,21 +35,22 @@ export const authOptions = {
 
           const data = response.data;
 
-          const user: User = {
-            id: data.user?.id || data.id || '',
-            email: creds.email,
-            name: data.user?.name || data.name || creds.name || '',
-            provider: creds.provider,
-            authType: data.authType || data.user?.authType || 'existing',
-          };
+          // Convert backend user to NextAuth format
+          const backendUser: User = data.user;
+          const user: NextAuthUser = convertBackendUserToNextAuthUser(backendUser);
           
-          if (creds.provider === 'google' && data.accessToken) {
-            user.accessToken = data.accessToken;
+          if (creds.provider === 'google' && data.tokens?.access_token) {
+            user.accessToken = data.tokens.access_token;
+          }
+
+          // Store tokens for client-side use
+          if (data.tokens) {
+            (user as any).tokens = data.tokens;
           }
 
           // Extract session_id from the response if available
-          if (data.sessionId) {
-            (user as any).sessionId = data.sessionId;
+          if (data.session?.session_id) {
+            (user as any).sessionId = data.session.session_id;
           }
 
           return user;

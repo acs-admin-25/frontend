@@ -3,106 +3,35 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/auth/auth-options';
 import { apiClient } from '@/lib/api/client';
 
+const CLIENT_ID = process.env.OUTLOOK_CLIENT_ID!;
+const CLIENT_SECRET = process.env.OUTLOOK_CLIENT_SECRET!;
+const REDIRECT_URI = process.env.OUTLOOK_REDIRECT_URI!;
+
 /**
  * POST /api/calendar/outlook/connection
  * Save Outlook Calendar integration settings
  */
 export async function POST(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized', status: 401 },
-        { status: 401 }
-      );
-    }
+  const { code } = await request.json();
 
-    const body = await request.json();
-    const { accessToken, refreshToken, expiresAt } = body;
+  const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      code,
+      redirect_uri: REDIRECT_URI,
+      grant_type: 'authorization_code',
+      scope: 'offline_access https://graph.microsoft.com/Calendars.ReadWrite'
+    })
+  });
 
-    if (!accessToken) {
-      return NextResponse.json(
-        { success: false, error: 'Access token is required', status: 400 },
-        { status: 400 }
-      );
-    }
+  const tokenData = await tokenRes.json();
 
-    // Get existing integration or create new one
-    const integrationResponse = await apiClient.dbSelect({
-      table_name: 'CalendarIntegrations',
-      index_name: 'user-email-type-index',
-      key_name: 'user_email',
-      key_value: session.user.email,
-    });
+  // TODO: Save tokenData.access_token and tokenData.refresh_token to your user’s record in your DB
 
-    let integrationId: string;
-    let existingIntegration: any = null;
-
-    if (integrationResponse.success && integrationResponse.data?.items) {
-      existingIntegration = integrationResponse.data.items.find(
-        (integration: any) => integration.type === 'outlook-calendar'
-      );
-    }
-
-    if (existingIntegration) {
-      integrationId = existingIntegration.id;
-    } else {
-      integrationId = crypto.randomUUID();
-    }
-
-    const integration = {
-      id: integrationId,
-      type: 'outlook-calendar',
-      name: 'Outlook Calendar Integration',
-      isActive: true,
-      settings: {
-        accessToken,
-        refreshToken,
-        expiresAt,
-        autoSync: true,
-        syncInterval: 15, // minutes
-      },
-      lastSync: existingIntegration?.lastSync,
-      syncStatus: 'idle',
-      createdAt: existingIntegration?.createdAt || new Date(),
-      updatedAt: new Date(),
-    };
-
-    const response = await apiClient.dbUpdate({
-      table_name: 'CalendarIntegrations',
-      index_name: 'id-index',
-      key_name: 'id',
-      key_value: integrationId,
-      update_data: {
-        ...integration,
-        user_email: session.user.email,
-        created_at: integration.createdAt.toISOString(),
-        updated_at: integration.updatedAt.toISOString(),
-      },
-    });
-
-    if (!response.success) {
-      throw new Error(response.error || 'Failed to save integration settings');
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: integration,
-      message: existingIntegration ? 'Integration updated successfully' : 'Integration created successfully',
-      status: 200,
-    });
-
-  } catch (error) {
-    console.error('[Outlook Connection API] POST error:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Internal server error',
-        status: 500 
-      },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json({ success: true, token: tokenData });
 }
 
 /**

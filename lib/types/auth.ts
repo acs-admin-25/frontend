@@ -78,6 +78,7 @@ export interface Credentials {
   password: string;
   name?: string;
   provider: SignupProvider;
+  idToken?: string; // Google OAuth ID token for verification
 }
 
 export interface SignupData extends Credentials {
@@ -86,6 +87,7 @@ export interface SignupData extends Credentials {
   lastName?: string;
   phone_number?: string;
   organization?: string;
+  idToken?: string; // Google OAuth ID token for verification
 }
 
 // NextAuth specific types (for compatibility)

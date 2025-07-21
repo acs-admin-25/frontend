@@ -561,8 +561,15 @@ export class ApiClient {
   }
 
   // Authentication operations
-  async login(credentials: { email: string; password: string; provider?: string; name?: string }): Promise<ApiResponse<any>> {
-    return this.request('api/auth/login', { method: 'POST', body: credentials });
+  async login(credentials: { email: string; password: string; provider?: string; name?: string; idToken?: string }): Promise<ApiResponse<any>> {
+    const loginData = {
+      email: credentials.email,
+      password: credentials.password,
+      provider: credentials.provider || 'email', // Default to 'email' for form-based login
+      idToken: credentials.idToken || '', // Default to empty string for form-based login
+      ...(credentials.name && { name: credentials.name })
+    };
+    return this.request('api/auth/login', { method: 'POST', body: loginData });
   }
 
   async signup(userData: any): Promise<ApiResponse<any>> {
@@ -761,8 +768,15 @@ export class ServerApiClient {
   }
 
   // Authentication operations
-  async login(credentials: { email: string; password: string; provider?: string; name?: string }): Promise<ApiResponse<any>> {
-    return this.request('api/auth/login', { method: 'POST', body: credentials });
+  async login(credentials: { email: string; password: string; provider?: string; name?: string; idToken?: string }): Promise<ApiResponse<any>> {
+    const loginData = {
+      email: credentials.email,
+      password: credentials.password,
+      provider: credentials.provider || 'email', // Default to 'email' for form-based login
+      idToken: credentials.idToken || '', // Default to empty string for form-based login
+      ...(credentials.name && { name: credentials.name })
+    };
+    return this.request('api/auth/login', { method: 'POST', body: loginData });
   }
 
   async signup(userData: any): Promise<ApiResponse<any>> {

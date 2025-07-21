@@ -1,7 +1,5 @@
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NEXT_PUBLIC_STAGE === 'dev';
 
-// Next Auth Needs these 'translations' from the local env file to work because it loads on the server side. 
-// It doesn't have access to the local env file on the server side, so we load in any necessary env variables here
 
 export const config = {
   NEXTAUTH_URL: isDev
@@ -14,12 +12,10 @@ export const config = {
     ? process.env.GOOGLE_CLIENT_SECRET_DEV
     : process.env.GOOGLE_CLIENT_SECRET_PROD,
   NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
-  
   // Google Cloud Functions URLs
-  API_URL: 'https://us-central1-acs-dev-464702.cloudfunctions.net',
-  LOGIN_FUNCTION: 'https://us-central1-acs-dev-464702.cloudfunctions.net/login-dev',
-  SIGNUP_FUNCTION: 'https://us-central1-acs-dev-464702.cloudfunctions.net/signup-dev',
-  AUTH_MIDDLEWARE: 'https://us-central1-acs-dev-464702.cloudfunctions.net/auth-middleware-dev',
-  
+  API_URL: isDev
+    ? process.env.GCP_DEV_URL
+    : process.env.GCP_PROD_URL,
+
   RECAPTCHA_SECRET_KEY: process.env.RECAPTCHA_SECRET_KEY
 }; 

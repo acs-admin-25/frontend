@@ -31,17 +31,32 @@ export const authOptions = {
           // Login via backend
           const result = await serverApiClient.login({ email, password, provider, name });
           
-          // Handle backend response format: {message: "Login successful", token: "..."}
+          console.log('🔍 [NextAuth] Backend login result:', {
+            success: result.success,
+            hasData: !!result.data,
+            dataKeys: result.data ? Object.keys(result.data) : null,
+            error: result.error,
+            status: result.status
+          });
+          
+          // Handle backend response format: {success: true, data: {message: "Login successful", token: "..."}}
           if (result.success && result.data?.message && result.data?.token) {
             // Create a minimal user object for NextAuth
             return {
-              id: email, // Use email as ID temporarily
+              id: result.data.user?.id || email, // Use user ID from backend or email as fallback
               email: email,
-              name: name || email,
+              name: result.data.user?.name || name || email,
               provider: provider || 'form',
-              authType: 'existing'
+              authType: result.data.user?.authType || 'existing'
             };
           } else {
+            console.error('❌ [NextAuth] Backend login failed:', {
+              success: result.success,
+              data: result.data,
+              error: result.error,
+              status: result.status,
+              expectedFormat: 'Expected {success: true, data: {message: string, token: string}}'
+            });
             throw new Error(result.error || 'Invalid credentials');
           }
         } catch (error) {

@@ -672,10 +672,12 @@ export class ServerApiClient {
   private defaultHeaders: Record<string, string>;
 
   constructor() {
-    // For server-side calls, we need to use the full URL
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-    const host = process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL_DEV || 'http://localhost:3000';
-    this.baseURL = host.replace(/\/$/, ''); // Remove trailing slash
+    // For server-side calls to backend, use the Google Cloud Functions URL
+    const isDev = process.env.NEXT_PUBLIC_STAGE === 'dev';
+    this.baseURL = (isDev
+      ? process.env.GCP_DEV_URL
+      : process.env.GCP_PROD_URL) || 'http://localhost:8080';
+    this.baseURL = this.baseURL.replace(/\/$/, ''); // Remove trailing slash
     this.defaultHeaders = {
       'Content-Type': 'application/json',
     };
@@ -776,11 +778,13 @@ export class ServerApiClient {
       idToken: credentials.idToken || '', // Default to empty string for form-based login
       ...(credentials.name && { name: credentials.name })
     };
-    return this.request('api/auth/login', { method: 'POST', body: loginData });
+    // Call backend login endpoint directly, not the Next.js API route
+    return this.request('login', { method: 'POST', body: loginData });
   }
 
   async signup(userData: any): Promise<ApiResponse<any>> {
-    return this.request('api/auth/signup', { method: 'POST', body: userData });
+    // Call backend signup endpoint directly, not the Next.js API route
+    return this.request('signup', { method: 'POST', body: userData });
   }
 }
 

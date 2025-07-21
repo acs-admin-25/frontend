@@ -13,9 +13,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { signIn } from 'next-auth/react';
-import { SignupData } from '@/types/auth';
+import { SignupData } from '@/lib/types/auth';
 import Script from 'next/script';
 import { handleAuthError, validateAuthForm, clearAuthData, setAuthType } from '@/lib/auth/auth-utils';
+import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -78,7 +79,6 @@ const SignupPage: React.FC = () => {
   const [recaptchaReady, setRecaptchaReady] = useState(false);
   const [recaptchaLoading, setRecaptchaLoading] = useState(true);
   const [recaptchaError, setRecaptchaError] = useState<string | null>(null);
-  const [showUserExistsError, setShowUserExistsError] = useState(false);
 
   /**
    * Password validation rules
@@ -90,6 +90,8 @@ const SignupPage: React.FC = () => {
     { label: 'One number', test: (pw: string) => /\d/.test(pw) },
     { label: 'One symbol', test: (pw: string) => /[^A-Za-z0-9\s]/.test(pw) },
   ];
+
+
 
   /**
    * Retrieves reCAPTCHA token for form submission
@@ -130,7 +132,7 @@ const SignupPage: React.FC = () => {
     if (name === "confirmPassword") {
       setConfirmPassword(value)
     } else {
-      setFormData((prev) => ({
+      setFormData((prev: SignupData) => ({
         ...prev,
         [name]: value,
       }))
@@ -179,7 +181,7 @@ const SignupPage: React.FC = () => {
       }
 
       // Update form data with captcha token
-      setFormData((prev) => ({
+      setFormData((prev: SignupData) => ({
         ...prev,
         captchaToken: token,
       }));
@@ -198,10 +200,18 @@ const SignupPage: React.FC = () => {
 
       const data = await response.json();
 
+      console.log('Signup response:', { status: response.status, data });
+
       if (!response.ok) {
-        if (data.error === "User already exists") {
-          setShowUserExistsError(true);
+        // Check for 409 status code (Conflict) or specific error message indicating user exists
+        if (response.status === 409 || data.error === "User already exists" || data.error === "User with this email already exists") {
+          console.log('User already exists - showing toast');
+          toast.error("An account with this email already exists. Please sign in instead.", {
+            duration: 5000,
+            position: 'top-center',
+          });
         } else {
+          console.log('Other error - showing alert:', data.error);
           setError(handleAuthError(data.error));
         }
         return;
@@ -360,15 +370,7 @@ const SignupPage: React.FC = () => {
                   <AlertDescription>{recaptchaError}</AlertDescription>
                 </Alert>
               )}
-              {showUserExistsError && (
-                 <Alert variant="destructive" className="mb-6">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>User Exists</AlertTitle>
-                  <AlertDescription>
-                    An account with this email already exists. Please <Link href="/login" className="font-bold hover:underline">Sign In</Link> instead.
-                  </AlertDescription>
-                </Alert>
-              )}
+
 
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
@@ -483,7 +485,7 @@ const SignupPage: React.FC = () => {
               <div className="mt-8 text-center">
                 <p className="text-sm text-muted-foreground">
                   Already have an account?{' '}
-                  <Link href="/login" className="text-muted hover:text-secondary">
+                  <Link href="/login" className="text-primary hover:text-secondary">
                     Sign in
                   </Link>
                 </p>

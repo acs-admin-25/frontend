@@ -90,13 +90,11 @@ export async function POST(request: Request) {
             organization: signupData.organization || undefined
         });
 
-        // Forward the request to Google Cloud Function
+        // Forward the request to Google Cloud Function with service account authentication
         // Backend expects: email, password, first_name, last_name, phone_number?, organization?
-        const response = await fetch(config.SIGNUP_FUNCTION, {
+        const { authenticatedFetch } = await import('@/lib/auth/google-auth');
+        const response = await authenticatedFetch(config.SIGNUP_FUNCTION, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
             body: JSON.stringify({ 
                 email: signupData.email,
                 password: signupData.password,

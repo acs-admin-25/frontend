@@ -25,11 +25,11 @@ export async function POST(request: Request) {
         console.log('🚀 LOGIN API - Calling Cloud Function:', config.LOGIN_FUNCTION);
         console.log('📤 LOGIN API - Request payload:', { email, password: '***', provider, name });
 
-        // Call Google Cloud Function directly
+        // Call Google Cloud Function with service account authentication
         // Backend expects only email and password
-        const response = await fetch(config.LOGIN_FUNCTION, {
+        const { authenticatedFetch } = await import('@/lib/auth/google-auth');
+        const response = await authenticatedFetch(config.LOGIN_FUNCTION, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password }),
         });
 

@@ -22,8 +22,7 @@ export async function initializeGoogleAuth() {
     
     // Initialize Google Auth client
     authClient = new GoogleAuth({
-      credentials,
-      scopes: ['https://www.googleapis.com/auth/cloud-platform']
+      credentials
     });
 
     console.log('✅ Google Auth client initialized successfully');
@@ -37,17 +36,23 @@ export async function initializeGoogleAuth() {
 /**
  * Get authenticated headers for Cloud Functions requests
  */
-export async function getAuthenticatedHeaders(): Promise<HeadersInit> {
+export async function getAuthenticatedHeaders(functionUrl: string): Promise<HeadersInit> {
   try {
     const auth = await initializeGoogleAuth();
-    const client = await auth.getIdTokenClient('https://us-central1-acs-dev-464702.cloudfunctions.net');
+    
+    // Use the full function URL as the target audience
+    const client = await auth.getIdTokenClient(functionUrl);
+    
+    // Fetch the raw ID token for inspection
+    const idToken = await client.idTokenProvider.fetchIdToken(functionUrl);
+    console.log('🔑 ID TOKEN:', idToken);
     
     // Get the ID token
     const headers = await client.getRequestHeaders();
     
     return {
       'Content-Type': 'application/json',
-      'Authorization': headers.Authorization || '',
+      'Authorization': headers.get('Authorization') || '',
     };
   } catch (error) {
     console.error('❌ Failed to get authenticated headers:', error);
@@ -56,19 +61,43 @@ export async function getAuthenticatedHeaders(): Promise<HeadersInit> {
 }
 
 /**
- * Make authenticated request to Cloud Function
+ * Make authenticated request to Cloud Function using Google Auth client
  */
 export async function authenticatedFetch(url: string, options: RequestInit = {}) {
   try {
-    const headers = await getAuthenticatedHeaders();
+    const auth = await initializeGoogleAuth();
     
-    const response = await fetch(url, {
-      ...options,
+    // Use the full function URL as the target audience
+    const client = await auth.getIdTokenClient(url);
+    
+    // Fetch the raw ID token for inspection
+    const idToken = await client.idTokenProvider.fetchIdToken(url);
+    console.log('🔑 ID TOKEN:', idToken);
+    
+    // Parse the request body if it exists
+    let data = undefined;
+    if (options.body) {
+      try {
+        data = JSON.parse(options.body as string);
+      } catch (e) {
+        console.warn('Could not parse request body as JSON');
+      }
+    }
+    
+    // Use client.request() which automatically handles the correct Bearer token
+    const response = await client.request({
+      url,
+      method: options.method || 'GET',
+      data,
       headers: {
-        ...headers,
+        'Content-Type': 'application/json',
         ...options.headers,
       },
     });
+
+    if (!response.status || response.status >= 400) {
+      console.log(`❌ BACKEND ERROR: ${response.status} ${response.statusText}`);
+    }
 
     return response;
   } catch (error) {

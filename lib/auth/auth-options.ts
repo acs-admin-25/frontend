@@ -1,6 +1,7 @@
 import { JWT } from "next-auth/jwt";
 import Google from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
+import { GoogleAuth } from "google-auth-library";
 import { config } from '@/lib/config/local-api-config';
 import type { Credentials, SignupProvider, User, AuthType, LoginResponse } from '@/lib/types/auth';
 import { serverApiClient } from "@/lib/api/client";
@@ -90,27 +91,35 @@ export const authOptions = {
         try {
           console.log('🔍 NextAuth Google - Starting authentication for:', appUser.email);
           
-          // First, try to login with the Google user
-          // Backend expects only email and password for login
-          const loginData = {
-            email: appUser.email,
-            password: "" // Google users don't have passwords
-          };
+          // Get the ID token from the Google account
+          if (!account.id_token) {
+            console.error('❌ NextAuth Google - No ID token available');
+            throw new Error('Google ID token not available');
+          }
 
-          console.log('🚀 NextAuth Google - Calling Cloud Function for login');
-          const loginResponse = await fetch(config.LOGIN_FUNCTION, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(loginData)
+          // Initialize GoogleAuth with frontend service account
+          const auth = new GoogleAuth({
+            credentials: JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_KEY!),
           });
 
-          const loginResponseData = await loginResponse.json();
+          // Get a client that will fetch & attach the ID token as Bearer
+          const client = await auth.getIdTokenClient(config.LOGIN_FUNCTION);
+
+          console.log('🚀 NextAuth Google - Calling Cloud Function for login');
+          const rawIdToken = await client.idTokenProvider.fetchIdToken(config.LOGIN_FUNCTION);
+          const loginResponse = await client.request({
+            url: config.LOGIN_FUNCTION,
+            method: "POST",
+            data: { id_token: rawIdToken },
+          });
+
+          const loginResponseData = loginResponse.data as any;
           console.log('📥 NextAuth Google - Login response:', { status: loginResponse.status, data: loginResponseData });
 
-          if (loginResponse.ok && loginResponseData.success && loginResponseData.data) {
+          if (loginResponse.status === 200 && loginResponseData?.success && loginResponseData?.data) {
             // User exists, set authType and return true
-            appUser.authType = loginResponseData.data.user?.authType || loginResponseData.data.authType || 'existing';
-            appUser.id = loginResponseData.data.user?.id || loginResponseData.data.user?.id || '';
+            (appUser as any).authType = loginResponseData.data.user?.authType || loginResponseData.data.authType || 'existing';
+            (appUser as any).id = loginResponseData.data.user?.id || loginResponseData.data.user?.id || '';
             appUser.accessToken = account.access_token;
             
             // Extract session_id from the response if available
@@ -140,13 +149,14 @@ export const authOptions = {
           };
 
           console.log('🚀 NextAuth Google - Calling Cloud Function for signup');
-          const signupResponse = await fetch(config.SIGNUP_FUNCTION, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(signupData)
+          const signupClient = await auth.getIdTokenClient(config.SIGNUP_FUNCTION);
+          const signupResponse = await signupClient.request({
+            url: config.SIGNUP_FUNCTION,
+            method: "POST",
+            data: signupData,
           });
 
-          const signupResponseData = await signupResponse.json();
+          const signupResponseData = signupResponse.data as any;
           console.log('📥 NextAuth Google - Signup response:', { status: signupResponse.status, data: signupResponseData });
           
           if (signupResponse.ok && signupResponseData.success && signupResponseData.data) {
@@ -163,16 +173,17 @@ export const authOptions = {
           } else if (signupResponse.status === 409) {
             // User already exists (race condition), try login again
             console.log('User already exists, retrying login...');
-            const retryLoginResponse = await fetch(config.LOGIN_FUNCTION, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(loginData)
+            const retryRawIdToken = await client.idTokenProvider.fetchIdToken(config.LOGIN_FUNCTION);
+            const retryLoginResponse = await client.request({
+              url: config.LOGIN_FUNCTION,
+              method: "POST",
+              data: { id_token: retryRawIdToken },
             });
             
-            const retryLoginResponseData = await retryLoginResponse.json();
-            if (retryLoginResponse.ok && retryLoginResponseData.success && retryLoginResponseData.data) {
-              appUser.authType = retryLoginResponseData.data.user?.authType || retryLoginResponseData.data.authType || 'existing';
-              appUser.id = retryLoginResponseData.data.user?.id || retryLoginResponseData.data.user?.id || '';
+            const retryLoginResponseData = retryLoginResponse.data as any;
+            if (retryLoginResponse.status === 200 && retryLoginResponseData?.success && retryLoginResponseData?.data) {
+              (appUser as any).authType = retryLoginResponseData.data.user?.authType || retryLoginResponseData.data.authType || 'existing';
+              (appUser as any).id = retryLoginResponseData.data.user?.id || retryLoginResponseData.data.user?.id || '';
               appUser.accessToken = account.access_token;
               
               // Extract session_id from the response if available

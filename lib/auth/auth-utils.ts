@@ -1,40 +1,5 @@
 import { Session, User } from 'next-auth';
-import type { User as BackendUser, Session as BackendSession, AuthTokens } from '@/types/auth';
-
-/**
- * Enhanced session cookie management for backend integration
- * @param session The current session object
- * @returns void
- */
-export const handleSessionCookie = (session: Session): void => {
-    // Handle backend session_id
-    if ((session as any).sessionId) {
-        const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
-        const cookieString = `session_id=${(session as any).sessionId}; path=/; samesite=lax${secure}`;
-        document.cookie = cookieString;
-        return;
-    }
-    
-    // Handle backend tokens
-    if ((session as any).tokens) {
-        const tokens = (session as any).tokens as AuthTokens;
-        storeAuthTokens(tokens);
-    }
-    
-    // Fallback to session.sessionCookie (legacy approach)
-    const sessionCookie = (session as any).sessionCookie;
-    if (sessionCookie) {
-        let match = sessionCookie.match(/session_id=([^;,\s]+)/);
-        if (!match) {
-            match = sessionCookie.match(/session_id=([^;]+)/);
-        }
-        if (match?.[1]) {
-            const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
-            const cookieString = `session_id=${match[1]}; path=/; samesite=lax${secure}`;
-            document.cookie = cookieString;
-        }
-    }
-};
+import type { User as BackendUser, Session as BackendSession, AuthTokens } from '@/lib/types/auth';
 
 /**
  * Determines the redirect path based on authentication type
@@ -95,9 +60,8 @@ export const clearAuthData = (): void => {
     // Clear sessionStorage items
     sessionStorage.removeItem('next-auth.session-token');
     
-    // Clear cookies
+    // Clear NextAuth cookies only
     const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
-    document.cookie = `session_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=lax${secure}`;
     document.cookie = `next-auth.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=lax${secure}`;
     document.cookie = `next-auth.callback-url=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=lax${secure}`;
     document.cookie = `next-auth.csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; samesite=lax${secure}`;
@@ -160,32 +124,9 @@ export const formatSession = (session: any) => {
             name: session.user.name,
             provider: session.user.provider,
             authType: session.user.authType,
-            accessToken: session.user.accessToken
+            backendToken: session.backendToken
         }
     };
-};
-
-/**
- * Verifies that the session_id cookie is present and valid
- * @returns boolean indicating if the session_id cookie exists
- */
-export const verifySessionCookie = (): boolean => {
-    if (typeof document === 'undefined') {
-        // Server-side rendering - assume cookie exists
-        return true;
-    }
-    
-    const cookies = document.cookie.split(';');
-    const sessionIdCookie = cookies.find(cookie => 
-        cookie.trim().startsWith('session_id=')
-    );
-    
-    if (!sessionIdCookie) {
-        return false;
-    }
-    
-    const sessionId = sessionIdCookie.split('=')[1]?.trim();
-    return !!sessionId && sessionId.length > 0;
 };
 
 /**
@@ -194,63 +135,6 @@ export const verifySessionCookie = (): boolean => {
  */
 export const isSecureEnvironment = (): boolean => {
     return process.env.NODE_ENV === 'production';
-};
-
-// Backend Integration Functions
-
-/**
- * Store authentication tokens in localStorage
- * @param tokens The authentication tokens
- */
-export const storeAuthTokens = (tokens: AuthTokens): void => {
-    if (typeof window !== 'undefined') {
-        localStorage.setItem('acs_access_token', tokens.access_token);
-        localStorage.setItem('acs_refresh_token', tokens.refresh_token);
-        localStorage.setItem('acs_token_expires', (Date.now() + tokens.expires_in * 1000).toString());
-    }
-};
-
-/**
- * Get stored authentication tokens
- * @returns AuthTokens or null
- */
-export const getStoredTokens = (): AuthTokens | null => {
-    if (typeof window !== 'undefined') {
-        const accessToken = localStorage.getItem('acs_access_token');
-        const refreshToken = localStorage.getItem('acs_refresh_token');
-        const expiresAt = localStorage.getItem('acs_token_expires');
-        
-        if (accessToken && refreshToken && expiresAt) {
-            return {
-                access_token: accessToken,
-                refresh_token: refreshToken,
-                expires_in: parseInt(expiresAt) - Date.now(),
-            };
-        }
-    }
-    return null;
-};
-
-/**
- * Clear stored authentication tokens
- */
-export const clearStoredTokens = (): void => {
-    if (typeof window !== 'undefined') {
-        localStorage.removeItem('acs_access_token');
-        localStorage.removeItem('acs_refresh_token');
-        localStorage.removeItem('acs_token_expires');
-    }
-};
-
-/**
- * Check if stored token is expired
- * @returns boolean indicating if token is expired
- */
-export const isTokenExpired = (): boolean => {
-    const tokens = getStoredTokens();
-    if (!tokens) return true;
-    
-    return tokens.expires_in <= 0;
 };
 
 /**

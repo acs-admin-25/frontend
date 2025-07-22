@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/api/client';
-import type { ApiResponse, RequestOptions } from '@/types/api';
+import type { ApiResponse, RequestOptions } from '@/lib/types/api';
 
 interface UseApiOptions extends RequestOptions {
   enabled?: boolean;

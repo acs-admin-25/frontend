@@ -27,6 +27,12 @@ export async function POST(request: Request) {
             requestBody.idToken = idToken;
         }
 
+        console.log('Making request to backend:', {
+            url: `${config.API_URL}/signup`,
+            method: 'POST',
+            body: requestBody
+        });
+
         const response = await fetch(`${config.API_URL}/signup`, {
             method: 'POST',
             headers: {
@@ -35,7 +41,55 @@ export async function POST(request: Request) {
             body: JSON.stringify(requestBody),
         });
 
-        const backendData = await response.json();
+        console.log('Backend response received:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            url: response.url
+        });
+
+        // Check if response is JSON
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error('Backend returned non-JSON response:', {
+                status: response.status,
+                contentType,
+                url: response.url
+            });
+            
+            // Try to get the response text for debugging
+            const responseText = await response.text();
+            console.error('Response text:', responseText);
+            
+            return NextResponse.json({
+                success: false,
+                error: 'Backend returned invalid response format',
+                status: response.status
+            }, { status: 500 });
+        }
+
+        let backendData;
+        try {
+            backendData = await response.json();
+            console.log('Backend data parsed:', {
+                message: backendData.message,
+                user_exists: backendData.user_exists,
+                hasToken: !!backendData.token,
+                dataKeys: Object.keys(backendData)
+            });
+        } catch (jsonError) {
+            console.error('Failed to parse backend response as JSON:', jsonError);
+            
+            // Try to get the raw response text for debugging
+            const responseText = await response.text();
+            console.error('Raw response text:', responseText);
+            
+            return NextResponse.json({
+                success: false,
+                error: 'Backend returned invalid JSON response',
+                status: response.status
+            }, { status: 500 });
+        }
 
         // Check if the backend request was successful
         if (response.ok && backendData.message) {
@@ -45,11 +99,12 @@ export async function POST(request: Request) {
                 data: {
                     message: backendData.message,
                     token: backendData.token,
+                    user_exists: backendData.user_exists,
                     user: {
                         id: uuidv4(), // Generate a temporary ID - will be replaced by Firebase user ID
                         name: name,
                         email: email,
-                        authType: backendData.message.includes('existing') ? 'existing' : 'new'
+                        authType: backendData.user_exists === false ? 'new' : 'existing'
                     }
                 },
                 status: response.status
@@ -64,6 +119,25 @@ export async function POST(request: Request) {
         }
     } catch (error) {
         console.error('Signup API error:', error);
+        
+        // Check if it's a network error
+        if (error instanceof TypeError && error.message.includes('fetch')) {
+            return NextResponse.json({
+                success: false,
+                error: 'Unable to connect to backend service. Please try again later.',
+                status: 503
+            }, { status: 503 });
+        }
+        
+        // Check if it's a JSON parsing error
+        if (error instanceof SyntaxError && error.message.includes('JSON')) {
+            return NextResponse.json({
+                success: false,
+                error: 'Backend service returned invalid response. Please try again later.',
+                status: 502
+            }, { status: 502 });
+        }
+        
         return NextResponse.json({
             success: false,
             error: 'Internal server error',

@@ -79,6 +79,8 @@ export interface Credentials {
   name?: string;
   provider: SignupProvider;
   idToken?: string; // Google OAuth ID token for verification
+  backendToken?: string; // Backend JWT token (for signup flow)
+  authType?: AuthType; // Auth type for new/existing users
 }
 
 export interface SignupData extends Credentials {

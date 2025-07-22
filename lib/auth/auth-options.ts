@@ -1,13 +1,10 @@
 import { JWT } from "next-auth/jwt";
 import Google from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
-import { GoogleAuth } from "google-auth-library";
 import { config } from '@/lib/config/local-api-config';
 import type { Credentials, SignupProvider, User, AuthType, LoginResponse } from '@/lib/types/auth';
 import { serverApiClient } from "@/lib/api/client";
-import { convertBackendUserToNextAuthUser, convertNextAuthUserToBackendUser } from './auth-utils';
 import type { Session as NextAuthSession, User as NextAuthUser } from 'next-auth';
-// Account and Profile types are not available, fallback to any
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
 
 export const authOptions = {
@@ -18,17 +15,40 @@ export const authOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
         name: { label: "Name", type: "text" },
-        provider: { label: "Provider", type: "text" }
+        provider: { label: "Provider", type: "text" },
+        backendToken: { label: "Backend Token", type: "text" },
+        authType: { label: "Auth Type", type: "text" }
       },
       async authorize(credentials) {
         if (!credentials) return null;
-        const { email, password, name, provider } = credentials;
+        const { email, password, name, provider, backendToken, authType } = credentials;
         try {
           if (provider === 'google') {
             // Should not hit here for Google, handled by Google provider
             return null;
           }
-          // Login via backend
+          
+          // If backendToken is provided (from signup), use it directly
+          if (backendToken) {
+            console.log('🔍 [NextAuth] Using provided backend token from signup');
+            return {
+              id: email, // Use email as ID for now
+              email: email,
+              name: name || email,
+              provider: provider || 'form',
+              authType: authType || 'new',
+              // Store backend JWT token for API calls
+              backendToken: backendToken,
+              // For new users, these fields will be populated later
+              role: undefined,
+              organization_id: undefined,
+              account_id: undefined,
+              response_email: undefined,
+              login_count: 0,
+            };
+          }
+          
+          // Login via backend (only for existing users)
           const result = await serverApiClient.login({ email, password, provider, name });
           
           console.log('🔍 [NextAuth] Backend login result:', {
@@ -41,13 +61,21 @@ export const authOptions = {
           
           // Handle backend response format: {success: true, data: {message: "Login successful", token: "..."}}
           if (result.success && result.data?.message && result.data?.token) {
-            // Create a minimal user object for NextAuth
+            // Create user object with backend JWT token
             return {
-              id: result.data.user?.id || email, // Use user ID from backend or email as fallback
+              id: result.data.user?.id || email,
               email: email,
               name: result.data.user?.name || name || email,
               provider: provider || 'form',
-              authType: result.data.user?.authType || 'existing'
+              authType: result.data.user?.authType || 'existing',
+              // Store backend JWT token for API calls
+              backendToken: result.data.token,
+              // Store user data from backend
+              role: result.data.user?.role,
+              organization_id: result.data.user?.organization_id,
+              account_id: result.data.user?.account_id,
+              response_email: result.data.user?.response_email,
+              login_count: result.data.user?.login_count,
             };
           } else {
             console.error('❌ [NextAuth] Backend login failed:', {
@@ -60,7 +88,6 @@ export const authOptions = {
             throw new Error(result.error || 'Invalid credentials');
           }
         } catch (error) {
-          // Optionally log error
           console.error('Credentials authorize error:', error);
           return null;
         }
@@ -126,13 +153,22 @@ export const authOptions = {
             hasUser: !!(loginRes.data?.user),
             error: loginRes.error,
             status: loginRes.status,
-            // Add logging for actual response structure
             actualData: loginRes.data
           });
           
           // Handle backend response format: {message: "Google login successful", token: "..."}
           if (loginRes.success && loginRes.data?.message && loginRes.data?.token) {
             console.log('✅ [NextAuth] Google login successful via existing user');
+            // Store backend token in user object
+            user.backendToken = loginRes.data.token;
+            user.id = loginRes.data.user?.id || user.email;
+            user.role = loginRes.data.user?.role;
+            user.organization_id = loginRes.data.user?.organization_id;
+            user.account_id = loginRes.data.user?.account_id;
+            user.response_email = loginRes.data.user?.response_email;
+            user.login_count = loginRes.data.user?.login_count;
+            // Set authType based on user_exists field from backend
+            user.authType = 'existing';
             return true;
           }
           
@@ -153,13 +189,22 @@ export const authOptions = {
             hasUser: !!(signupRes.data?.user),
             error: signupRes.error,
             status: signupRes.status,
-            // Add logging for actual response structure
             actualData: signupRes.data
           });
           
           // Handle backend response format: {message: "Google signup successful", token: "..."}
           if (signupRes.success && signupRes.data?.message && signupRes.data?.token) {
             console.log('✅ [NextAuth] Google signup successful for new user');
+            // Store backend token in user object
+            user.backendToken = signupRes.data.token;
+            user.id = signupRes.data.user?.id || user.email;
+            user.role = signupRes.data.user?.role;
+            user.organization_id = signupRes.data.user?.organization_id;
+            user.account_id = signupRes.data.user?.account_id;
+            user.response_email = signupRes.data.user?.response_email;
+            user.login_count = signupRes.data.user?.login_count;
+            // Set authType based on user_exists field from backend
+            user.authType ='new';
             return true;
           }
           
@@ -180,6 +225,7 @@ export const authOptions = {
           return false;
         }
       }
+      
       // For credentials, allow sign in if user is present
       const credentialsResult = !!user;
       console.log('🔐 [NextAuth] Credentials authentication result', {
@@ -202,6 +248,8 @@ export const authOptions = {
         token.account_id = user.account_id;
         token.response_email = user.response_email;
         token.login_count = user.login_count;
+        // Store backend JWT token for API calls
+        token.backendToken = user.backendToken;
       }
       return token;
     },
@@ -221,7 +269,8 @@ export const authOptions = {
           response_email: token.response_email,
           login_count: token.login_count,
         };
-        (session as any).sessionId = (token as any).sessionId || null;
+        // Store backend JWT token for API calls
+        (session as any).backendToken = (token as any).backendToken;
       }
       return session;
     }
@@ -234,7 +283,7 @@ export const authOptions = {
   },
   session: {
     strategy: "jwt" as const,
-    maxAge: 30 * 24 * 60 * 60, // 30 days
+    maxAge: 24 * 60 * 60, // 24 hours (match backend JWT expiration)
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: true, // Enable debug logging

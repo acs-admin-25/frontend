@@ -16,15 +16,14 @@ function ProcessFormContent() {
     if (session) {
       const authType = searchParams.get("authType");
 
-      // Extract session_id from NextAuth session
-      if ((session as any).sessionId) {
-        const secure = process.env.NODE_ENV === 'production' ? '; secure' : '';
-        const cookieString = `session_id=${(session as any).sessionId}; path=/; samesite=lax${secure}`;
-        document.cookie = cookieString;
-        console.log('Set session_id cookie from NextAuth session:', (session as any).sessionId);
-      } else {
-        console.warn('No session_id found in NextAuth session');
+      // Check if backend JWT token is available
+      if (!(session as any).backendToken) {
+        console.warn('No backend JWT token found in session');
+        router.replace('/login?error=no_backend_token');
+        return;
       }
+
+      console.log('Backend JWT token available, processing authentication');
 
       if (authType === "new") {
         router.replace("/new-user");

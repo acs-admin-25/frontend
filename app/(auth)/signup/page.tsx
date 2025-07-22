@@ -224,16 +224,19 @@ const SignupPage: React.FC = () => {
       // After successful signup, the backend already creates a session
       // We need to ensure NextAuth is synchronized with this session
       
-      // Create a NextAuth session without triggering another login call
+      // Create a NextAuth session directly using the backend token
+      // This avoids calling the login route again
       const result = await signIn('credentials', {
         email: formData.email,
-        password: formData.password,
+        password: '', // Don't send password again
         name: formData.name,
         provider: 'form',
         redirect: false,
-        callbackUrl: '/dashboard'
+        callbackUrl: '/dashboard',
+        // Pass the backend token directly to avoid login call
+        backendToken: data.data?.token,
+        authType: 'new'
       });
-
 
       if (result?.error) {
         console.error('[signup] NextAuth session creation error:', result.error);

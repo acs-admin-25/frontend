@@ -118,32 +118,36 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get all threads for the user
+    // Get all threads for the user using new GCP format
     const threadsResponse = await fetch(`${config.API_URL}/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `session_id=${sessionId}`
+        'Authorization': `Bearer ${actualUserId}`
       },
       body: JSON.stringify({
-        table_name: 'Threads',
-        index_name: 'associated_account-index',
-        key_name: 'associated_account',
-        key_value: actualUserId,
-        account_id: actualUserId,
-        session_id: sessionId
+        collection_name: 'Threads',
+        filters: [{
+          field: 'associated_account',
+          op: '==',
+          value: actualUserId
+        }],
+        user_id: actualUserId,
+        account_id: actualUserId
       })
     });
 
     console.log('[get_all_threads] Threads request details:', {
       url: `${config.API_URL}/db/select`,
       body: {
-        table_name: 'Threads',
-        index_name: 'associated_account-index',
-        key_name: 'associated_account',
-        key_value: actualUserId,
-        account_id: actualUserId,
-        session_id: sessionId
+        collection_name: 'Threads',
+        filters: [{
+          field: 'associated_account',
+          op: '==',
+          value: actualUserId
+        }],
+        user_id: actualUserId,
+        account_id: actualUserId
       }
     });
 
@@ -161,12 +165,14 @@ export async function POST(request: Request) {
         error: errorText,
         requestUrl: `${config.API_URL}/db/select`,
         requestBody: {
-          table_name: 'Threads',
-          index_name: 'associated_account-index',
-          key_name: 'associated_account',
-          key_value: actualUserId,
-          account_id: actualUserId,
-          session_id: sessionId
+          collection_name: 'Threads',
+          filters: [{
+            field: 'associated_account',
+            op: '==',
+            value: actualUserId
+          }],
+          user_id: actualUserId,
+          account_id: actualUserId
         }
       });
       
@@ -243,20 +249,22 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get all messages for these conversations
-    const messagesResponse = await fetch(`${config.API_URL}/db/batch-select`, {
+    // Get all messages for these conversations using new GCP format
+    const messagesResponse = await fetch(`${config.API_URL}/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Cookie': `session_id=${sessionId}`
+        'Authorization': `Bearer ${actualUserId}`
       },
       body: JSON.stringify({
-        table_name: 'Conversations',
-        index_name: 'conversation_id-index',
-        key_name: 'conversation_id',
-        key_values: conversationIds,
-        account_id: actualUserId,
-        session_id: sessionId
+        collection_name: 'Conversations',
+        filters: [{
+          field: 'conversation_id',
+          op: 'in',
+          value: conversationIds
+        }],
+        user_id: actualUserId,
+        account_id: actualUserId
       })
     });
 
@@ -272,14 +280,16 @@ export async function POST(request: Request) {
         status: messagesResponse.status,
         statusText: messagesResponse.statusText,
         error: errorText,
-        requestUrl: `${config.API_URL}/db/batch-select`,
+        requestUrl: `${config.API_URL}/db/select`,
         requestBody: {
-          table_name: 'Conversations',
-          index_name: 'conversation_id-index',
-          key_name: 'conversation_id',
-          key_values: conversationIds,
-          account_id: actualUserId,
-          session_id: sessionId
+          collection_name: 'Conversations',
+          filters: [{
+            field: 'conversation_id',
+            op: 'in',
+            value: conversationIds
+          }],
+          user_id: actualUserId,
+          account_id: actualUserId
         }
       });
       

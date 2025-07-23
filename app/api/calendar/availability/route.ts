@@ -8,7 +8,7 @@ import type {
   AISchedulingPreferences,
   TimeSlot,
   AvailabilityResponse 
-} from '@/types/calendar';
+} from '@/lib/types/calendar';
 
 /**
  * GET /api/calendar/availability
@@ -31,28 +31,36 @@ export async function GET(request: NextRequest) {
       return await getAvailableTimeSlots(session.user.email, request);
     }
 
-    // Get availability slots
+    // Get availability slots using new GCP format
     const availabilityResponse = await apiClient.dbSelect({
-      table_name: 'AvailabilitySlots',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: session.user.email,
+      collection_name: 'AvailabilitySlots',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: session.user.email
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
     if (!availabilityResponse.success) {
       throw new Error(availabilityResponse.error || 'Failed to fetch availability');
     }
 
-    // Get AI scheduling preferences
+    // Get AI scheduling preferences using new GCP format
     const preferencesResponse = await apiClient.dbSelect({
-      table_name: 'AISchedulingPreferences',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: session.user.email,
+      collection_name: 'AISchedulingPreferences',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: session.user.email
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
-    const availability = availabilityResponse.data?.items || [];
-    const preferences = preferencesResponse.data?.items?.[0] || null;
+    const availability = availabilityResponse.data?.data || [];
+    const preferences = preferencesResponse.data?.data?.[0] || null;
 
     return NextResponse.json({
       success: true,
@@ -318,6 +326,14 @@ async function updateAISchedulingPreferences(userEmail: string, preferencesData:
 
 async function getAvailableTimeSlots(userEmail: string, request: NextRequest): Promise<NextResponse> {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized', status: 401 },
+        { status: 401 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
@@ -335,35 +351,47 @@ async function getAvailableTimeSlots(userEmail: string, request: NextRequest): P
 
     // Get all events and availability slots for the date range
     const eventsResponse = await apiClient.dbSelect({
-      table_name: 'CalendarEvents',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: userEmail,
+      collection_name: 'CalendarEvents',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: userEmail
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
     const availabilityResponse = await apiClient.dbSelect({
-      table_name: 'AvailabilitySlots',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: userEmail,
+      collection_name: 'AvailabilitySlots',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: userEmail
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
     if (!eventsResponse.success || !availabilityResponse.success) {
       throw new Error('Failed to fetch calendar data');
     }
 
-    const events = eventsResponse.data?.items || [];
-    const availability = availabilityResponse.data?.items || [];
+    const events = eventsResponse.data?.data || [];
+    const availability = availabilityResponse.data?.data || [];
 
-    // Get AI scheduling preferences
+    // Get AI scheduling preferences using new GCP format
     const preferencesResponse = await apiClient.dbSelect({
-      table_name: 'AISchedulingPreferences',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: userEmail,
+      collection_name: 'AISchedulingPreferences',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: userEmail
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
-    const preferences = preferencesResponse.data?.items?.[0] || null;
+    const preferences = preferencesResponse.data?.data?.[0] || null;
 
     // Calculate available time slots
     const availableSlots = calculateAvailableSlots(

@@ -15,15 +15,29 @@ export interface RequestOptions {
 }
 
 export interface DbSelectParams {
-  table_name: string;
-  index_name: string;
-  key_name: string;
-  key_value: any;
+  collection_name: string;
+  filters?: Array<{
+    field: string;
+    op: '==' | '!=' | '>' | '<' | '>=' | '<=' | 'array-contains' | 'array-contains-any' | 'in';
+    value: any;
+  }>;
+  order_by?: string;
+  limit?: number;
+  start_after?: string;
+  user_id: string;
+  account_id: string;
 }
 
+
 export interface DbSelectResponse {
-  items: any[];
-  total: number;
+  success: boolean;
+  data: any[];
+  total_count: number;
+  has_more: boolean;
+  next_cursor?: string;
+  execution_time_ms: number;
+  query_complexity: number;
+  rate_limit_info?: any;
 }
 
 export interface DbUpdateParams {

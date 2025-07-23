@@ -51,32 +51,40 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '50');
 
-    // Get events from database
+    // Get events from database using new GCP format
     const eventsResponse = await apiClient.dbSelect({
-      table_name: 'CalendarEvents',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: session.user.email,
+      collection_name: 'CalendarEvents',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: session.user.email
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
     if (!eventsResponse.success) {
       throw new Error(eventsResponse.error || 'Failed to fetch events');
     }
 
-    // Get availability slots
+    // Get availability slots using new GCP format
     const availabilityResponse = await apiClient.dbSelect({
-      table_name: 'AvailabilitySlots',
-      index_name: 'user-email-index',
-      key_name: 'user_email',
-      key_value: session.user.email,
+      collection_name: 'AvailabilitySlots',
+      filters: [{
+        field: 'user_email',
+        op: '==',
+        value: session.user.email
+      }],
+      user_id: session.user.id,
+      account_id: session.user.id
     });
 
     if (!availabilityResponse.success) {
       throw new Error(availabilityResponse.error || 'Failed to fetch availability');
     }
 
-    const events = eventsResponse.data?.items || [];
-    const availability = availabilityResponse.data?.items || [];
+    const events = eventsResponse.data?.data || [];
+    const availability = availabilityResponse.data?.data || [];
 
     // Apply filters client-side for now
     const filteredEvents = applyEventFilters(events, filters);

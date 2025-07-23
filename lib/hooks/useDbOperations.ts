@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { apiClient } from '@/lib/api/client';
-import type { DbSelectParams, DbUpdateParams, DbDeleteParams } from '@/types/api';
+import type { DbSelectParams, DbUpdateParams, DbDeleteParams } from '@/lib/types/api';
 
 export function useDbOperations() {
   const select = useCallback(async (params: DbSelectParams) => {

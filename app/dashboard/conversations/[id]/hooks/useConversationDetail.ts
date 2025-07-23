@@ -120,12 +120,16 @@ export function useConversationDetail() {
       });
       
       try {
-        // Fetch user data from database
+        // Fetch user data from database using new GCP format
         const requestBody = {
-          table_name: 'Users',
-          index_name: 'id-index',
-          key_name: 'id',
-          key_value: session.user.id
+          collection_name: 'Users',
+          filters: [{
+            field: 'id',
+            op: '==',
+            value: session.user.id
+          }],
+          user_id: session.user.id,
+          account_id: session.user.id
         };
         
         console.log('🔍 [Signature] Database request:', requestBody);
@@ -145,8 +149,8 @@ export function useConversationDetail() {
           const data = await response.json();
           console.log('🔍 [Signature] Database response data:', data);
           
-          if (data.success && data.items && data.items.length > 0) {
-            const userData = data.items[0];
+          if (data.success && data.data && data.data.length > 0) {
+            const userData = data.data[0];
             console.log('🔍 [Signature] User data found:', {
               id: userData.id,
               email: userData.email,
@@ -171,9 +175,9 @@ export function useConversationDetail() {
             console.log('⚠️ [Signature] No user data found in response');
             console.log('⚠️ [Signature] Response structure:', {
               success: data.success,
-              hasItems: !!data.items,
-              itemsLength: data.items?.length || 0,
-              itemsKeys: data.items ? Object.keys(data.items) : null
+              hasData: !!data.data,
+              dataLength: data.data?.length || 0,
+              dataKeys: data.data ? Object.keys(data.data) : null
             });
             // Fallback to default values
             setUserSignature('Best regards,\n[Your Name]\nReal Estate Agent');

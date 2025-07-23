@@ -70,21 +70,23 @@ export async function GET(request: Request) {
       });
     }
 
-    // Fetch all invocations for the user
+    // Fetch all invocations for the user using new GCP format
     const response = await fetch(`${config.API_URL}/db/select`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'Cookie': `session_id=${sessionId}` })
+        'Authorization': `Bearer ${session.user.id}`
       },
       body: JSON.stringify({
-        table_name: 'Invocations',
-        index_name: 'associated_account-index',
-        key_name: 'associated_account',
-        key_value: session.user.id,
+        collection_name: 'Invocations',
+        filters: [{
+          field: 'associated_account',
+          op: '==',
+          value: session.user.id
+        }],
+        user_id: session.user.id,
         account_id: session.user.id
-      }),
-      credentials: 'include',
+      })
     });
 
     if (!response.ok) {

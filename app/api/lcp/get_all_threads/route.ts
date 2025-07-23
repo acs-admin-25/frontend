@@ -193,14 +193,20 @@ export async function POST(request: Request) {
     let threads: any[];
     try {
       const threadsData = await threadsResponse.json();
-      if (!Array.isArray(threadsData)) {
+      
+      // Handle GCP response format (object with data property)
+      if (threadsData && typeof threadsData === 'object' && 'data' in threadsData) {
+        threads = threadsData.data || [];
+      } else if (Array.isArray(threadsData)) {
+        // Handle direct array response (legacy format)
+        threads = threadsData;
+      } else {
         console.error('[get_all_threads] Invalid response format from threads fetch:', threadsData);
         return NextResponse.json(
           { error: 'Invalid response format from threads fetch' },
           { status: 500 }
         );
       }
-      threads = threadsData;
       
       console.log('[get_all_threads] Raw threads data from database:', {
         threadsCount: threads.length,
@@ -322,11 +328,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Handle the case where messages response has { items: [...], count: ... } structure
+    // Handle the case where messages response has different formats
     let messagesArray: any[];
-    if (messages && typeof messages === 'object' && 'items' in messages) {
+    if (messages && typeof messages === 'object' && 'data' in messages) {
+      // GCP format: { data: [...], success: true, ... }
+      messagesArray = messages.data || [];
+    } else if (messages && typeof messages === 'object' && 'items' in messages) {
+      // Legacy format: { items: [...], count: ... }
       messagesArray = messages.items;
     } else if (Array.isArray(messages)) {
+      // Direct array format
       messagesArray = messages;
     } else {
       console.error('[get_all_threads] Invalid response format from messages fetch:', messages);

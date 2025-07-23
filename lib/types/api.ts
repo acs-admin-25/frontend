@@ -65,6 +65,33 @@ export interface DbDeleteResponse {
   deleted: number;
 }
 
+export interface DbBatchSelectParams {
+  collection_name: string;
+  document_ids?: string[];
+  batch_queries?: Array<{
+    filters: Array<{
+      field: string;
+      op: '==' | '!=' | '>' | '<' | '>=' | '<=' | 'array-contains' | 'array-contains-any' | 'in';
+      value: any;
+    }>;
+    limit?: number;
+  }>;
+  user_id: string;
+  account_id: string;
+}
+
+export interface DbBatchSelectResponse {
+  success: boolean;
+  data: any[] | Record<string, any>;
+  type?: 'document_ids' | 'batch_queries';
+  requested_count?: number;
+  found_count?: number;
+  query_count?: number;
+  total_results?: number;
+  execution_time_ms: number;
+  rate_limit_info?: any;
+}
+
 export interface ThreadFilters {
   status?: ('active' | 'closed' | 'archived' | 'spam')[];
   dateFrom?: string;

@@ -9,6 +9,8 @@ import type {
   DbUpdateResponse,
   DbDeleteParams,
   DbDeleteResponse,
+  DbBatchSelectParams,
+  DbBatchSelectResponse,
   ThreadFilters,
   ThreadUpdate,
 } from '../types/api';
@@ -339,15 +341,42 @@ export class ApiClient {
   }
 
   // Utility operations
-  async dbBatchSelect(queries: Array<{
-    collection_name: string;
-    key_name: string;
-    key_value: string;
-    filters?: Record<string, any>;
-  }>): Promise<ApiResponse<any>> {
-    return this.request<any>('db/batch-select', {
+  /**
+   * Batch select operation for GCP Firestore
+   * 
+   * Supports two modes:
+   * 1. Document IDs: Get multiple documents by their IDs
+   * 2. Batch Queries: Execute multiple queries concurrently
+   * 
+   * @param params - Batch select parameters
+   * @returns Promise with batch select response
+   */
+  async dbBatchSelect(params: DbBatchSelectParams): Promise<ApiResponse<DbBatchSelectResponse>> {
+    return this.request<DbBatchSelectResponse>('db/batch-select', {
       method: 'POST',
-      body: { queries }
+      body: params
+    });
+  }
+
+  // Example usage methods for batch-select
+  async batchSelectByDocumentIds(collectionName: string, documentIds: string[]): Promise<ApiResponse<DbBatchSelectResponse>> {
+    return this.dbBatchSelect({
+      collection_name: collectionName,
+      document_ids: documentIds,
+      user_id: this.currentUserId!,
+      account_id: this.currentUserId!
+    });
+  }
+
+  async batchSelectByQueries(collectionName: string, queries: Array<{
+    filters: Array<{ field: string; op: '==' | '!=' | '>' | '<' | '>=' | '<=' | 'array-contains' | 'array-contains-any' | 'in'; value: any }>;
+    limit?: number;
+  }>): Promise<ApiResponse<DbBatchSelectResponse>> {
+    return this.dbBatchSelect({
+      collection_name: collectionName,
+      batch_queries: queries,
+      user_id: this.currentUserId!,
+      account_id: this.currentUserId!
     });
   }
 

@@ -2,9 +2,9 @@ import { JWT } from "next-auth/jwt";
 import Google from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { config } from '@/lib/config/local-api-config';
-import type { Credentials, SignupProvider, User, AuthType, LoginResponse } from '@/lib/types/auth';
+import type { Credentials, SignupProvider, AuthType, LoginResponse } from '@/lib/types/auth';
 import { serverApiClient } from "@/lib/api/client";
-import type { Session as NextAuthSession, User as NextAuthUser } from 'next-auth';
+import type { Session as NextAuthSession } from 'next-auth';
 import type { JWT as NextAuthJWT } from 'next-auth/jwt';
 
 export const authOptions = {
@@ -254,7 +254,8 @@ export const authOptions = {
       return token;
     },
     
-    async session({ session, token }: { session: NextAuthSession; token: NextAuthJWT }) {
+    async session(params: any) {
+      const { session, token } = params;
       // Attach token info to session
       if (token) {
         (session as any).user = {

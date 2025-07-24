@@ -8,7 +8,7 @@ import { DbSelectParams } from '@/lib/types/api';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { table_name, index_name, key_name, key_value, filters, order_by, limit, start_after } = body;
+    const { collection_name, filters, account_id } = body;
 
     // Get session using getServerSession with authOptions
     const session = await getServerSession(authOptions) as Session & { user: { id: string } };
@@ -21,38 +21,20 @@ export async function POST(request: Request) {
     }
 
     // Validate required parameters for GCP SELECT
-    if (!table_name) {
-      console.error('[db/select] Missing required parameter: table_name');
+    if (!collection_name) {
+      console.error('[db/select] Missing required parameter: collection_name');
       return NextResponse.json(
-        { error: 'Missing required parameter: table_name' },
+        { error: 'Missing required parameter: collection_name' },
         { status: 400 }
       );
     }
 
     // Convert old AWS format to new GCP format
     const gcpRequest: DbSelectParams = {
-      collection_name: table_name,
-      filters: [],
-      order_by: order_by,
-      limit: limit || 100,
-      start_after: start_after,
-      user_id: session.user.id,
-      account_id: session.user.id
+      collection_name: collection_name,
+      filters: filters,
+      account_id: account_id
     };
-
-    // Convert old index/key format to GCP filters format
-    if (index_name && key_name && key_value !== undefined) {
-      gcpRequest.filters!.push({
-        field: key_name,
-        op: '==',
-        value: key_value
-      });
-    }
-
-    // Add any additional filters
-    if (filters && Array.isArray(filters)) {
-      gcpRequest.filters!.push(...filters);
-    }
 
     // Construct the GCP Cloud Function URL
     const gcpFunctionUrl = `${config.API_URL}/db/select`;
@@ -62,7 +44,6 @@ export async function POST(request: Request) {
       requestBody: {
         ...gcpRequest,
         // Don't log sensitive data
-        user_id: gcpRequest.user_id ? '***' : undefined,
         account_id: gcpRequest.account_id ? '***' : undefined
       }
     });

@@ -3,14 +3,11 @@
 // This page is currently disabled and will be used in the future to handle new user onboarding
 // Redirecting to dashboard instead
 
-import { redirect } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { config } from '@/lib/config/local-api-config';
-import { goto404 } from '../utils/error';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mail, Globe, CheckCircle2, ArrowRight, XCircle, AlertTriangle, Info } from 'lucide-react';
+import { CheckCircle2, ArrowRight, XCircle, Info } from 'lucide-react';
 import Step1Welcome from './steps/Step1Welcome';
 import Step2Profile from './steps/Step2Profile';
 import Step3EmailSetup from './steps/Step3EmailSetup';
@@ -19,7 +16,6 @@ import Step5Settings from './steps/Step5Settings';
 import { useNewUser } from './useNewUser';
 import { PageLayout } from '@/components/common/Layout/PageLayout';
 import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
-import { apiClient } from '@/lib/api/client';
 
 interface SessionUser {
   id: string;
@@ -61,11 +57,11 @@ export default function NewUserPage() {
         handleEmailSubmit,
         lcpSettings,
         setLcpSettings,
-        handleLcpSettingsSubmit,
+        handleLCPSubmit,
         settingsData,
         setSettingsData,
         handleSettingsSubmit,
-        handleCompleteSetup
+        handleComplete
     } = useNewUser();
 
     // Redirect if not authenticated
@@ -141,8 +137,8 @@ export default function NewUserPage() {
                 };
                 const setLcpSettingsData = (newData: { tone: string, style: string, samplePrompt: string }) => {
                     setLcpSettings({
-                        lcp_tone: newData.tone,
-                        lcp_style: newData.style,
+                        lcp_tone: newData.tone as 'professional' | 'casual' | 'friendly' | 'formal',
+                        lcp_style: newData.style as 'concise' | 'detailed' | 'conversational' | 'direct',
                         lcp_sample_prompt: newData.samplePrompt
                     });
                 };
@@ -150,7 +146,7 @@ export default function NewUserPage() {
                     <Step4LCPSettings
                         data={lcpSettingsData}
                         setData={setLcpSettingsData}
-                        onContinue={handleLcpSettingsSubmit}
+                        onContinue={handleLCPSubmit}
                         onBack={prevStep}
                         loading={loading}
                     />
@@ -238,7 +234,7 @@ export default function NewUserPage() {
                             <motion.button
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
-                                onClick={handleCompleteSetup}
+                                onClick={handleComplete}
                                 className="px-8 py-4 bg-gradient-to-r from-primary to-secondary text-white rounded-lg font-semibold flex items-center gap-3 hover:from-primary/90 hover:to-secondary/90 transition-colors duration-200 shadow-sm"
                                 aria-label="Go to dashboard"
                             >

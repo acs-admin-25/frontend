@@ -37,23 +37,24 @@ export async function POST(request: Request) {
     const { userId } = requestBody;
 
     // Get session to verify user is authenticated
-    const session = await getServerSession(authOptions) as Session & { user: { id: string } };
+    const session = await getServerSession(authOptions) as Session & { user: { id: string; account_id: string } };
     console.log('[get_all_threads] Session info:', {
       hasSession: !!session,
       hasUser: !!session?.user,
-      userId: session?.user?.id
+      userId: session?.user?.id,
+      accountId: session?.user?.account_id
     });
     
-    if (!session?.user?.id) {
+    if (!session?.user?.account_id) {
       return NextResponse.json(
         { error: 'Unauthorized - No authenticated user found' },
         { status: 401 }
       );
     }
 
-    // Use session user ID if userId is not provided or doesn't match
-    const actualUserId = userId || session.user.id;
-    if (userId && userId !== session.user.id) {
+    // Use session account_id if userId is not provided or doesn't match
+    const actualUserId = userId || session.user.account_id;
+    if (userId && userId !== session.user.account_id) {
       return NextResponse.json(
         { error: 'Unauthorized - User ID mismatch' },
         { status: 401 }

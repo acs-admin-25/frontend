@@ -59,11 +59,11 @@ export const authOptions = {
             status: result.status
           });
           
-          // Handle backend response format: {success: true, data: {message: "Login successful", token: "..."}}
+          // Handle backend response format: {success: true, data: {message: "Login successful", token: "...", user_id: "..."}}
           if (result.success && result.data?.message && result.data?.token) {
             // Create user object with backend JWT token
             return {
-              id: result.data.user?.id || email,
+              id: result.data.user_id || result.data.user?.id || email, // Use canonical user_id
               email: email,
               name: result.data.user?.name || name || email,
               provider: provider || 'form',
@@ -161,7 +161,7 @@ export const authOptions = {
             console.log('✅ [NextAuth] Google login successful via existing user');
             // Store backend token in user object
             user.backendToken = loginRes.data.token;
-            user.id = loginRes.data.user?.id || user.email;
+            user.id = loginRes.data.user_id || loginRes.data.user?.id || user.email; // Use canonical user_id
             user.role = loginRes.data.user?.role;
             user.organization_id = loginRes.data.user?.organization_id;
             user.account_id = loginRes.data.user?.account_id;
@@ -197,7 +197,7 @@ export const authOptions = {
             console.log('✅ [NextAuth] Google signup successful for new user');
             // Store backend token in user object
             user.backendToken = signupRes.data.token;
-            user.id = signupRes.data.user?.id || user.email;
+            user.id = signupRes.data.user_id || signupRes.data.user?.id || user.email; // Use canonical user_id
             user.role = signupRes.data.user?.role;
             user.organization_id = signupRes.data.user?.organization_id;
             user.account_id = signupRes.data.user?.account_id;
@@ -290,27 +290,20 @@ export const authOptions = {
   debug: true, // Enable debug logging
   logger: {
     error(code: any, metadata: any) {
-      console.error('🚨 [NextAuth] Error:', { code, metadata });
     },
     warn(code: any) {
-      console.warn('⚠️ [NextAuth] Warning:', code);
     },
     debug(code: any, metadata: any) {
-      console.log('🔍 [NextAuth] Debug:', { code, metadata });
     }
   },
   events: {
     async signIn(message: any) {
-      console.log('🔓 [NextAuth] signIn event:', message);
     },
     async signOut(message: any) {
-      console.log('🔒 [NextAuth] signOut event:', message);
     },
     async createUser(message: any) {
-      console.log('👤 [NextAuth] createUser event:', message);
     },
     async session(message: any) {
-      console.log('📋 [NextAuth] session event:', message);
     }
   }
 }; 

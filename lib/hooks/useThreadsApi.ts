@@ -11,12 +11,12 @@ import type { Conversation } from '@/types/conversation';
  * Enhanced hook for fetching and processing all conversation threads.
  */
 export function useThreadsApi(options: any = {}) {
-  const { data: session } = useSession() as { data: (Session & { user: { id: string } }) | null };
+  const { data: session } = useSession() as { data: (Session & { user: { id: string; account_id: string } }) | null };
   
   const { data: rawData, loading, error, refetch, mutate } = useApi<any>('lcp/get_all_threads', {
     method: 'POST',
-    body: { userId: session?.user?.id },
-    enabled: options.enabled !== false && !!session?.user?.id,
+    body: { userId: session?.user?.account_id },
+    enabled: options.enabled !== false && !!session?.user?.account_id,
     ...options
   });
 
@@ -27,13 +27,13 @@ export function useThreadsApi(options: any = {}) {
 
   // Polling logic for new emails
   useEffect(() => {
-    if (!options.polling || !session?.user?.id) return;
+    if (!options.polling || !session?.user?.account_id) return;
 
     // Check for new emails when page becomes visible
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         console.log('Page became visible, checking for new emails...');
-        checkForNewEmailsShared(session.user.id, refetch);
+        checkForNewEmailsShared(session.user.account_id, refetch);
       }
     };
 
@@ -43,7 +43,7 @@ export function useThreadsApi(options: any = {}) {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [options.polling, session?.user?.id, refetch]);
+  }, [options.polling, session?.user?.account_id, refetch]);
 
   return {
     data: processedData,

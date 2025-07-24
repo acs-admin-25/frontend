@@ -21,7 +21,7 @@ interface RecentConversationsProps {
 
 export function RecentConversations({ conversations = [] }: RecentConversationsProps) {
   const { data: session } = useSession() as { 
-    data: (any & { user: { id: string; email?: string } }) | null; 
+    data: (any & { user: { id: string; account_id: string; email?: string } }) | null; 
     status: 'loading' | 'authenticated' | 'unauthenticated';
   };
   const [savedContacts, setSavedContacts] = useState<string[]>([]);
@@ -42,12 +42,11 @@ export function RecentConversations({ conversations = [] }: RecentConversationsP
         
         // Try to fetch saved contacts from the database
         // If the table doesn't exist, we'll just use an empty array
-        const response = await apiClient.dbSelect({
-          table_name: 'ManualContacts',
-          index_name: 'associated_account-index',
-          key_name: 'associated_account',
-          key_value: (session?.user as any)?.id || ''
-        });
+                    const response = await apiClient.dbSelect({
+                collection_name: 'ManualContacts',
+                filters: [{ field: 'associated_account', op: '==', value: (session?.user as any)?.account_id || '' }],
+                account_id: (session?.user as any)?.account_id || ''
+            });
 
         if (response.success && response.data) {
           const contactEmails = response.data.map((contact: any) => contact.email).filter(Boolean);
@@ -66,7 +65,7 @@ export function RecentConversations({ conversations = [] }: RecentConversationsP
     };
 
     loadSavedContacts();
-  }, [session?.user?.id]);
+  }, [session?.user?.account_id]);
 
   // Data is now pre-sorted by lastMessageAt in descending order from processThreadsResponse
   // Filter out empty conversations (no actual conversation), then take the first 5 conversations (most recent first)

@@ -20,7 +20,7 @@ const ConversationsContext = createContext<ConversationsContextType | undefined>
 
 export function ConversationsProvider({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession() as { 
-    data: (Session & { user: { id: string; email?: string } }) | null; 
+    data: (Session & { user: { id: string; account_id: string; email?: string } }) | null; 
     status: 'loading' | 'authenticated' | 'unauthenticated';
   };
   
@@ -32,7 +32,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchConversations = async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.account_id) return;
 
     setIsLoading(true);
     setError(null);
@@ -43,7 +43,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userId: session.user.id }),
+        body: JSON.stringify({ userId: session.user.account_id }),
       });
 
       if (!response.ok) {
@@ -69,7 +69,8 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
   };
 
   const checkForNewEmails = async () => {
-    if (!session?.user?.id) return;
+    // Immediately return if session is unauthenticated or missing user ID
+    if (status !== 'authenticated' || !session?.user?.account_id) return;
 
     try {
       // Query the Users table for the current user's new_email field
@@ -82,8 +83,8 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
           table_name: 'Users',
           index_name: 'id-index',
           key_name: 'id',
-          key_value: session.user.id,
-          account_id: session.user.id
+          key_value: session.user.account_id,
+          account_id: session.user.account_id
         }),
         credentials: 'include',
       });
@@ -114,9 +115,9 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
               table_name: 'Users',
               index_name: 'id-index',
               key_name: 'id',
-              key_value: session.user.id,
+              key_value: session.user.account_id,
               update_data: { new_email: false },
-              account_id: session.user.id
+              account_id: session.user.account_id
             }),
             credentials: 'include',
           });
@@ -135,7 +136,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
 
   // Initial fetch and setup
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.id && !isInitialized) {
+    if (status === 'authenticated' && session?.user?.account_id && !isInitialized) {
       // Load threads once after everything is mounted
       fetchConversations();
       setIsInitialized(true);
@@ -143,7 +144,7 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
       // Set up 5-minute interval to check for new emails
       intervalRef.current = setInterval(checkForNewEmails, 5 * 60 * 1000); // 5 minutes
     }
-  }, [status, session?.user?.id, isInitialized]);
+  }, [status, session?.user?.account_id, isInitialized]);
 
   // Cleanup interval on unmount or session change
   useEffect(() => {

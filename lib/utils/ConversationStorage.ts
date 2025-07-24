@@ -11,7 +11,7 @@ import type { Conversation, Message } from '@/types/conversation';
 interface StorageMetadata {
   version: string;
   lastUpdated: string;
-  userId: string;
+  accountId: string;
   conversationCount: number;
 }
 
@@ -24,7 +24,7 @@ export class ConversationStorage {
   private static instance: ConversationStorage;
   private storageKey = 'acs_conversations';
   private metadataKey = 'acs_conversations_metadata';
-  private currentUserId: string | null = null;
+  private currentAccountId: string | null = null;
 
   private constructor() {}
 
@@ -38,8 +38,8 @@ export class ConversationStorage {
   /**
    * Initialize storage for a specific user
    */
-  initialize(userId: string): void {
-    this.currentUserId = userId;
+  initialize(accountId: string): void {
+    this.currentAccountId = accountId;
   }
 
   /**
@@ -60,8 +60,8 @@ export class ConversationStorage {
    * Store conversations with metadata
    */
   storeConversations(conversations: Conversation[]): void {
-    if (!this.currentUserId) {
-      console.warn('[ConversationStorage] No user ID set, cannot store conversations');
+    if (!this.currentAccountId) {
+      console.warn('[ConversationStorage] No account ID set, cannot store conversations');
       return;
     }
 
@@ -69,7 +69,7 @@ export class ConversationStorage {
       const metadata: StorageMetadata = {
         version: '1.0.0',
         lastUpdated: new Date().toISOString(),
-        userId: this.currentUserId,
+        accountId: this.currentAccountId,
         conversationCount: conversations.length
       };
 
@@ -79,7 +79,7 @@ export class ConversationStorage {
       };
 
       localStorage.setItem(this.storageKey, JSON.stringify(storageData));
-      console.log(`[ConversationStorage] Stored ${conversations.length} conversations for user ${this.currentUserId}`);
+      console.log(`[ConversationStorage] Stored ${conversations.length} conversations for account ${this.currentAccountId}`);
     } catch (error) {
       console.error('[ConversationStorage] Error storing conversations:', error);
     }
@@ -89,8 +89,8 @@ export class ConversationStorage {
    * Retrieve conversations from storage
    */
   getConversations(): Conversation[] | null {
-    if (!this.currentUserId) {
-      console.warn('[ConversationStorage] No user ID set, cannot retrieve conversations');
+    if (!this.currentAccountId) {
+      console.warn('[ConversationStorage] No account ID set, cannot retrieve conversations');
       return null;
     }
 
@@ -101,8 +101,8 @@ export class ConversationStorage {
       const data: StorageData = JSON.parse(stored);
       
       // Verify the data belongs to the current user
-      if (data.metadata.userId !== this.currentUserId) {
-        console.warn('[ConversationStorage] Stored data belongs to different user, clearing');
+      if (data.metadata.accountId !== this.currentAccountId) {
+        console.warn('[ConversationStorage] Stored data belongs to different account, clearing');
         this.clear();
         return null;
       }
@@ -110,7 +110,7 @@ export class ConversationStorage {
       // Restore Date objects from stored data
       const restoredConversations = this.restoreDateObjects(data.conversations);
       
-      console.log(`[ConversationStorage] Retrieved ${restoredConversations.length} conversations for user ${this.currentUserId}`);
+      console.log(`[ConversationStorage] Retrieved ${restoredConversations.length} conversations for account ${this.currentAccountId}`);
       return restoredConversations;
     } catch (error) {
       console.error('[ConversationStorage] Error retrieving conversations:', error);
@@ -257,14 +257,14 @@ export class ConversationStorage {
    * Check if storage has data for current user
    */
   hasData(): boolean {
-    if (!this.currentUserId) return false;
+    if (!this.currentAccountId) return false;
     
     try {
       const stored = localStorage.getItem(this.storageKey);
       if (!stored) return false;
 
       const data: StorageData = JSON.parse(stored);
-      return data.metadata.userId === this.currentUserId;
+      return data.metadata.accountId === this.currentAccountId;
     } catch (error) {
       return false;
     }
@@ -293,6 +293,7 @@ export class ConversationStorage {
    */
   clear(): void {
     try {
+      this.currentAccountId = null;
       localStorage.removeItem(this.storageKey);
       localStorage.removeItem(this.metadataKey);
       console.log('[ConversationStorage] Cleared all stored data');

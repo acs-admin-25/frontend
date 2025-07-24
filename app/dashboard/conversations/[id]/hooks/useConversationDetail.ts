@@ -17,7 +17,7 @@ interface ColumnState {
 export function useConversationDetail() {
   const params = useParams();
   const { data: session } = useSession() as { 
-    data: (Session & { user: { id: string; email?: string } }) | null; 
+    data: (Session & { user: { id: string; account_id: string; email?: string } }) | null; 
     status: 'loading' | 'authenticated' | 'unauthenticated';
   };
   const conversationId = params?.id as string;
@@ -108,29 +108,28 @@ export function useConversationDetail() {
   // Load user signature and email from database
   useEffect(() => {
     const loadUserSignature = async () => {
-      if (!session?.user?.id) {
-        console.log('🔍 [Signature] No session user ID available');
+      if (!session?.user?.account_id) {
+        console.log('🔍 [Signature] No session account_id available');
         return;
       }
       
-      console.log('🔍 [Signature] Fetching signature for user ID:', session.user.id);
+      console.log('🔍 [Signature] Fetching signature for account_id:', session.user.account_id);
       console.log('🔍 [Signature] Session data:', {
-        userId: session.user.id,
+        accountId: session.user.account_id,
         userEmail: session.user.email
       });
       
       try {
         // Fetch user data from database using new GCP format
-        const requestBody = {
-          collection_name: 'Users',
-          filters: [{
-            field: 'id',
-            op: '==',
-            value: session.user.id
-          }],
-          user_id: session.user.id,
-          account_id: session.user.id
-        };
+                        const requestBody = {
+                   collection_name: 'Users',
+                   filters: [{
+                       field: 'account_id',
+                       op: '==',
+                       value: session.user.account_id
+                   }],
+                   account_id: session.user.account_id
+               };
         
         console.log('🔍 [Signature] Database request:', requestBody);
         

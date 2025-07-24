@@ -24,15 +24,14 @@ export interface DbSelectParams {
   order_by?: string;
   limit?: number;
   start_after?: string;
-  user_id: string;
   account_id: string;
 }
 
 
 export interface DbSelectResponse {
   success: boolean;
-  data: any[];
-  total_count: number;
+  items: any[];
+  total: number;
   has_more: boolean;
   next_cursor?: string;
   execution_time_ms: number;
@@ -76,7 +75,6 @@ export interface DbBatchSelectParams {
     }>;
     limit?: number;
   }>;
-  user_id: string;
   account_id: string;
 }
 

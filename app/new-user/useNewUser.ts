@@ -1,20 +1,34 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { useDbOperations } from '@/lib/hooks/useDbOperations';
+import { useProfile } from '@/lib/hooks/useProfile';
 
 export function useNewUser() {
     const router = useRouter();
     const { data: session, status } = useSession();
-    const { select, update } = useDbOperations();
-    const userId = (session as any)?.user?.id;
+    const { 
+        profile, 
+        isLoading, 
+        error, 
+        updateProfile, 
+        updateBasicInfo, 
+        updateProfessionalInfo, 
+        updateContactInfo, 
+        updateEmailSettings, 
+        updateLCPSettings,
+        markProfileComplete,
+        updateOnboardingStep,
+        completion,
+        nextOnboardingStep
+    } = useProfile();
 
     const [step, setStep] = useState(1);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [userData, setUserData] = useState<any>(null);
+    const [localError, setLocalError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isTransitioning, setIsTransitioning] = useState(false);
+    const isTransitioningRef = useRef(false);
 
-    // Form states
+    // Form states - these will be populated from profile data
     const [profileData, setProfileData] = useState({
         bio: '',
         location: '',
@@ -33,8 +47,8 @@ export function useNewUser() {
     });
 
     const [lcpSettings, setLcpSettings] = useState({
-        lcp_tone: "professional",
-        lcp_style: "concise",
+        lcp_tone: "professional" as 'professional' | 'casual' | 'friendly' | 'formal',
+        lcp_style: "concise" as 'concise' | 'detailed' | 'conversational' | 'direct',
         lcp_sample_prompt: ""
     });
 
@@ -45,199 +59,259 @@ export function useNewUser() {
         autoEmails: true,
     });
 
-    const fetchUserData = useCallback(async () => {
-        if (!userId) return;
-        setLoading(true);
-        try {
-            const { data, error } = await select({
-                table_name: 'Users',
-                index_name: 'id-index',
-                key_name: 'id',
-                key_value: userId,
+    // Populate form data from profile when it loads
+    useEffect(() => {
+        if (profile) {
+            setProfileData({
+                bio: profile.bio || '',
+                location: profile.location || '',
+                state: profile.state || '',
+                country: profile.country || '',
+                zipcode: profile.zipcode || '',
+                company: profile.company || '',
+                jobTitle: profile.job_title || ''
             });
-
-            if (error || !data?.items?.[0]) {
-                setError(error || "User not found");
-            } else {
-                const user = data.items[0];
-                setUserData(user);
-                // Pre-fill forms
-                setProfileData({
-                    bio: user.bio || '',
-                    location: user.location || '',
-                    state: user.state || '',
-                    country: user.country || '',
-                    zipcode: user.zipcode || '',
-                    company: user.company || '',
-                    jobTitle: user.job_title || ''
-                });
-                setEmailData(prev => ({ 
-                    ...prev, 
-                    responseEmail: user.acsMail || '',
-                    customEmail: user.responseEmail || user.acsMail || ''
-                }));
-                setLcpSettings({
-                    lcp_tone: user.lcp_tone || "professional",
-                    lcp_style: user.lcp_style || "concise",
-                    lcp_sample_prompt: user.lcp_sample_prompt || ""
-                });
-                setSettingsData(prev => ({
-                    ...prev,
-                    signature: user.email_signature || '',
-                    smsEnabled: user.sms_enabled === 'true',
-                    phone: user.phone || '',
-                    autoEmails: user.lcp_automatic_enabled !== 'false',
-                }));
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to fetch user data');
-        } finally {
-            setLoading(false);
+            
+            setEmailData(prev => ({ 
+                ...prev, 
+                responseEmail: profile.response_email || '',
+                customEmail: profile.response_email || profile.acs_mail || ''
+            }));
+            
+            setLcpSettings({
+                lcp_tone: profile.lcp_tone || "professional",
+                lcp_style: profile.lcp_style || "concise",
+                lcp_sample_prompt: profile.lcp_sample_prompt || ""
+            });
+            
+            setSettingsData(prev => ({
+                ...prev,
+                signature: profile.email_signature || '',
+                smsEnabled: profile.sms_enabled === true,
+                phone: profile.phone || '',
+                autoEmails: profile.auto_emails !== false,
+            }));
         }
-    }, [userId, select]);
+    }, [profile]);
 
     useEffect(() => {
         if (status === 'authenticated') {
-            fetchUserData();
+            // Profile will be automatically loaded by the UserProfileProvider
+            if (profile && !isLoading && !isSubmitting && !isTransitioningRef.current) {
+                // Set initial step based on profile completion, but only if not submitting or transitioning
+                const currentStep = profile.onboarding_step || 1;
+                console.log('🔄 [NewUser] Setting step from profile:', { 
+                    profileStep: profile.onboarding_step, 
+                    currentStep, 
+                    isTransitioning: isTransitioningRef.current, 
+                    isSubmitting 
+                });
+                setStep(currentStep);
+            }
         } else if (status === 'unauthenticated') {
             router.push('/login');
         }
-    }, [status, fetchUserData, router]);
+    }, [status, profile, isLoading, router, isSubmitting]);
     
-    const nextStep = () => setStep(s => s + 1);
-    const prevStep = () => setStep(s => Math.max(1, s - 1));
+    const nextStep = () => {
+        console.log('🔄 [NewUser] Moving to next step, current step:', step);
+        isTransitioningRef.current = true;
+        setIsTransitioning(true);
+        setStep(s => s + 1);
+        // Reset transition flag after a short delay to allow profile updates to complete
+        setTimeout(() => {
+            console.log('✅ [NewUser] Transition flag reset');
+            isTransitioningRef.current = false;
+            setIsTransitioning(false);
+        }, 100);
+    };
+    const prevStep = () => {
+        isTransitioningRef.current = true;
+        setIsTransitioning(true);
+        setStep(s => Math.max(1, s - 1));
+        // Reset transition flag after a short delay to allow profile updates to complete
+        setTimeout(() => {
+            isTransitioningRef.current = false;
+            setIsTransitioning(false);
+        }, 100);
+    };
 
     const handleProfileSubmit = async () => {
-        setLoading(true);
-        setError(null);
+        setLocalError(null);
+        setIsSubmitting(true);
+        
         try {
-            const { success, error } = await update({
-                table_name: 'Users',
-                index_name: 'id-index',
-                key_name: 'id',
-                key_value: userId,
-                update_data: { 
-                    ...profileData, 
-                    job_title: profileData.jobTitle 
-                }
-            });
-            if (success) {
+            console.log('🔄 [NewUser] Starting profile submission, current step:', step);
+            
+            const result = await updateProfessionalInfo({
+                company: profileData.company,
+                job_title: profileData.jobTitle,
+                location: profileData.location,
+                state: profileData.state,
+                country: profileData.country,
+                zipcode: profileData.zipcode,
+            }, { optimistic: true });
+
+            if (result.success) {
+                console.log('✅ [NewUser] Profile update successful, updating onboarding step to 2');
+                await updateOnboardingStep(2);
+                console.log('✅ [NewUser] Onboarding step updated, moving to next step');
                 nextStep();
             } else {
-                setError(error || 'Failed to save profile');
+                console.error('❌ [NewUser] Profile update failed:', result.error);
+                setLocalError(result.error || 'Failed to save profile');
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save profile');
+            console.error('❌ [NewUser] Profile submission error:', err);
+            setLocalError(err instanceof Error ? err.message : 'Failed to save profile');
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
     };
 
     const handleEmailSubmit = async () => {
-        setLoading(true);
-        setError(null);
+        setLocalError(null);
+        setIsSubmitting(true);
+        
         try {
-            const finalEmail = emailData.emailOption === 'default' 
-                ? emailData.responseEmail 
-                : emailData.customEmail;
-            
-            const update_data = {
-                responseEmail: finalEmail,
-                acsMail: emailData.responseEmail,
-            };
-            
-            const { success, error } = await update({
-                table_name: 'Users',
-                index_name: 'id-index',
-                key_name: 'id',
-                key_value: userId,
-                update_data
-            });
-            if (success) {
+            const result = await updateContactInfo({
+                response_email: emailData.responseEmail,
+                custom_domain: emailData.customDomain,
+            }, { optimistic: true });
+
+            if (result.success) {
+                await updateOnboardingStep(3);
                 nextStep();
             } else {
-                setError(error || 'Failed to save email settings');
+                setLocalError(result.error || 'Failed to save email settings');
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save email settings');
+            setLocalError(err instanceof Error ? err.message : 'Failed to save email settings');
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
     };
 
-    const handleLcpSettingsSubmit = async () => {
-        setLoading(true);
-        setError(null);
+    const handleLCPSubmit = async () => {
+        setLocalError(null);
+        setIsSubmitting(true);
+        
         try {
-            const { success, error } = await update({
-                table_name: 'Users',
-                index_name: 'id-index',
-                key_name: 'id',
-                key_value: userId,
-                update_data: lcpSettings
-            });
-            if (success) {
+            const result = await updateLCPSettings({
+                lcp_tone: lcpSettings.lcp_tone,
+                lcp_style: lcpSettings.lcp_style,
+                lcp_sample_prompt: lcpSettings.lcp_sample_prompt,
+            }, { optimistic: true });
+
+            if (result.success) {
+                await updateOnboardingStep(4);
                 nextStep();
             } else {
-                setError(error || 'Failed to save LCP settings');
+                setLocalError(result.error || 'Failed to save LCP settings');
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save LCP settings');
+            setLocalError(err instanceof Error ? err.message : 'Failed to save LCP settings');
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
-    }
+    };
 
     const handleSettingsSubmit = async () => {
-        setLoading(true);
-        setError(null);
+        setLocalError(null);
+        setIsSubmitting(true);
+        
         try {
-            const { success, error } = await update({
-                table_name: 'Users',
-                index_name: 'id-index',
-                key_name: 'id',
-                key_value: userId,
-                update_data: {
-                    ...settingsData,
-                    lcp_automatic_enabled: settingsData.autoEmails ? 'true' : 'false',
-                    sms_enabled: settingsData.smsEnabled ? 'true' : 'false',
-                }
-            });
-            if (success) {
-                nextStep(); // Go to final step (step 6)
+            const result = await updateEmailSettings({
+                email_signature: settingsData.signature,
+                auto_emails: settingsData.autoEmails,
+            }, { optimistic: true });
+
+            if (result.success) {
+                // Also update phone and SMS settings
+                await updateContactInfo({
+                    phone: settingsData.phone,
+                }, { optimistic: false });
+
+                await updateProfile({
+                    sms_enabled: settingsData.smsEnabled,
+                }, { optimistic: false });
+
+                await updateOnboardingStep(5);
+                nextStep();
             } else {
-                setError(error || 'Failed to save settings');
+                setLocalError(result.error || 'Failed to save settings');
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to save settings');
+            setLocalError(err instanceof Error ? err.message : 'Failed to save settings');
         } finally {
-            setLoading(false);
+            setIsSubmitting(false);
         }
     };
-    
-    const handleCompleteSetup = async () => {
-        // Directly redirect to dashboard without unnecessary database update
-        router.push('/dashboard');
+
+    const handleComplete = async () => {
+        setLocalError(null);
+        setIsSubmitting(true);
+        
+        try {
+            const result = await markProfileComplete({ optimistic: true });
+            
+            if (result.success) {
+                // Redirect to dashboard
+                router.push('/dashboard');
+            } else {
+                setLocalError(result.error || 'Failed to complete setup');
+            }
+        } catch (err) {
+            setLocalError(err instanceof Error ? err.message : 'Failed to complete setup');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
+    const handleSkip = () => {
+        nextStep();
+    };
+
+    const handleBack = () => {
+        prevStep();
+    };
+
+    // Combine local error with profile error
+    const combinedError = localError || error;
+
     return {
+        // State
         step,
-        loading,
-        error,
-        nextStep,
-        prevStep,
+        loading: isLoading || isSubmitting,
+        error: combinedError,
+        profile,
+        
+        // Form data
         profileData,
         setProfileData,
-        handleProfileSubmit,
         emailData,
         setEmailData,
-        handleEmailSubmit,
         lcpSettings,
         setLcpSettings,
-        handleLcpSettingsSubmit,
         settingsData,
         setSettingsData,
+        
+        // Profile completion
+        completion,
+        nextOnboardingStep,
+        
+        // Actions
+        nextStep,
+        prevStep,
+        handleProfileSubmit,
+        handleEmailSubmit,
+        handleLCPSubmit,
         handleSettingsSubmit,
-        handleCompleteSetup
+        handleComplete,
+        handleSkip,
+        handleBack,
+        
+        // Utility
+        setLocalError,
     };
 } 

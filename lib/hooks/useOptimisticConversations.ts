@@ -53,7 +53,7 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
   } = options;
 
   const { data: session, status } = useSession() as { 
-    data: (Session & { user: { id: string } }) | null; 
+    data: (Session & { user: { id: string; account_id: string } }) | null; 
     status: 'loading' | 'authenticated' | 'unauthenticated';
   };
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -66,23 +66,24 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
 
   // Initialize API client and storage when user is authenticated
   useEffect(() => {
-    if (status === 'authenticated' && session?.user?.id && !isInitialized) {
-      apiClient.initialize(session.user.id);
+    if (status === 'authenticated' && session?.user?.account_id && !isInitialized) {
+      apiClient.initialize(session.user.account_id);
+      conversationStorage.initialize(session.user.account_id);
       setIsInitialized(true);
     }
-  }, [status, session?.user?.id, isInitialized]);
+  }, [status, session?.user?.account_id, isInitialized]);
 
   // Load conversations from storage or API
   const loadConversations = useCallback(async (forceRefresh = false) => {
-    if (!session?.user?.id) {
-      console.log('[useOptimisticConversations] No session user ID, skipping load');
+    if (!session?.user?.account_id) {
+      console.log('[useOptimisticConversations] No session account_id, skipping load');
       return;
     }
 
     console.log('[useOptimisticConversations] Loading conversations:', {
       forceRefresh,
       hasSession: !!session,
-      userId: session.user.id,
+      accountId: session.user.account_id,
       hasCachedData: conversationStorage.hasData(),
       isStale: conversationStorage.isStale(10)
     });
@@ -179,16 +180,16 @@ export function useOptimisticConversations(options: UseOptimisticConversationsOp
     } finally {
       setLoading(false);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.account_id]);
 
   // Check for new emails
   const checkForNewEmails = useCallback(async () => {
-    if (!session?.user?.id) return;
+    if (!session?.user?.account_id) return;
     
-    await checkForNewEmailsShared(session.user.id, async () => {
+    await checkForNewEmailsShared(session.user.account_id, async () => {
       await loadConversations(true);
     });
-  }, [session?.user?.id, loadConversations]);
+  }, [session?.user?.account_id, loadConversations]);
 
   // Initial load
   useEffect(() => {

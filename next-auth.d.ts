@@ -10,6 +10,13 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
+      account_id?: string;
+      organization_id?: string;
+      role?: string;
+      response_email?: string;
+      login_count?: number;
+      provider?: string;
+      authType?: string;
       // add other custom fields if needed
     }
   }

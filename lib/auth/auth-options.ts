@@ -63,7 +63,7 @@ export const authOptions = {
           if (result.success && result.data?.message && result.data?.token) {
             // Create user object with backend JWT token
             return {
-              id: result.data.user_id || result.data.user?.id || email, // Use canonical user_id
+              id: result.data.account_id || result.data.user_id || result.data.user?.id || email, // Use account_id as primary ID
               email: email,
               name: result.data.user?.name || name || email,
               provider: provider || 'form',
@@ -73,7 +73,7 @@ export const authOptions = {
               // Store user data from backend
               role: result.data.user?.role,
               organization_id: result.data.user?.organization_id,
-              account_id: result.data.user?.account_id,
+              account_id: result.data.account_id || result.data.user_id || result.data.user?.id || email, // Ensure account_id is set
               response_email: result.data.user?.response_email,
               login_count: result.data.user?.login_count,
             };
@@ -161,10 +161,10 @@ export const authOptions = {
             console.log('✅ [NextAuth] Google login successful via existing user');
             // Store backend token in user object
             user.backendToken = loginRes.data.token;
-            user.id = loginRes.data.user_id || loginRes.data.user?.id || user.email; // Use canonical user_id
+            user.id = loginRes.data.account_id || loginRes.data.user_id || loginRes.data.user?.id || user.email; // Use account_id as primary ID
             user.role = loginRes.data.user?.role;
             user.organization_id = loginRes.data.user?.organization_id;
-            user.account_id = loginRes.data.user?.account_id;
+            user.account_id = loginRes.data.account_id || loginRes.data.user_id || loginRes.data.user?.id || user.email; // Ensure account_id is set
             user.response_email = loginRes.data.user?.response_email;
             user.login_count = loginRes.data.user?.login_count;
             // Set authType based on user_exists field from backend
@@ -197,10 +197,10 @@ export const authOptions = {
             console.log('✅ [NextAuth] Google signup successful for new user');
             // Store backend token in user object
             user.backendToken = signupRes.data.token;
-            user.id = signupRes.data.user_id || signupRes.data.user?.id || user.email; // Use canonical user_id
+            user.id = signupRes.data.account_id || signupRes.data.user_id || signupRes.data.user?.id || user.email; // Use account_id as primary ID
             user.role = signupRes.data.user?.role;
             user.organization_id = signupRes.data.user?.organization_id;
-            user.account_id = signupRes.data.user?.account_id;
+            user.account_id = signupRes.data.account_id || signupRes.data.user_id || signupRes.data.user?.id || user.email; // Ensure account_id is set
             user.response_email = signupRes.data.user?.response_email;
             user.login_count = signupRes.data.user?.login_count;
             // Set authType based on user_exists field from backend

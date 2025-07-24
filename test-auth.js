@@ -1,48 +1,46 @@
-// Test script to verify service account authentication
-const { authenticatedFetch } = require('./lib/auth/google-auth');
+// Test script to verify authentication flow
+// Run with: node test-auth.js
 
-async function testAuthentication() {
-  console.log('🧪 Testing Service Account Authentication...\n');
+const fetch = require('node-fetch');
 
+async function testAuth() {
+  console.log('🔍 Testing authentication flow...');
+  
   try {
-    // Test health check endpoint
-    console.log('🔍 Testing health check endpoint...');
-    const healthResponse = await authenticatedFetch('https://us-central1-acs-dev-464702.cloudfunctions.net/auth-health-check-dev');
-    
-    console.log('📥 Health check status:', healthResponse.status);
-    
-    if (healthResponse.ok) {
-      const healthData = await healthResponse.json();
-      console.log('✅ Health check successful:', healthData);
-    } else {
-      console.log('❌ Health check failed');
-    }
-
-    console.log('\n🔍 Testing login endpoint...');
-    const loginResponse = await authenticatedFetch('https://us-central1-acs-dev-464702.cloudfunctions.net/login-dev', {
+    // Test login endpoint
+    console.log('\n📤 Testing login endpoint...');
+    const loginResponse = await fetch('http://localhost:3000/api/auth/login', {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         email: 'test@example.com',
-        password: 'testpassword'
+        password: 'testpassword123',
+        provider: 'form'
       })
     });
-
-    console.log('📥 Login status:', loginResponse.status);
     
-    if (loginResponse.status === 401) {
-      console.log('✅ Login endpoint accessible (expected 401 for invalid credentials)');
-    } else if (loginResponse.ok) {
-      console.log('✅ Login endpoint working');
+    const loginData = await loginResponse.json();
+    console.log('📥 Login response:', {
+      status: loginResponse.status,
+      success: loginData.success,
+      hasToken: !!loginData.data?.token,
+      hasAccountId: !!loginData.data?.account_id,
+      accountId: loginData.data?.account_id,
+      message: loginData.data?.message
+    });
+    
+    if (loginData.data?.account_id) {
+      console.log('✅ Account ID is properly set:', loginData.data.account_id);
     } else {
-      console.log('❌ Login endpoint error:', loginResponse.status);
+      console.log('❌ Account ID is missing from response');
     }
-
-    console.log('\n🎯 Authentication test completed!');
     
   } catch (error) {
-    console.error('💥 Authentication test failed:', error.message);
+    console.error('❌ Test failed:', error.message);
   }
 }
 
 // Run the test
-testAuthentication().catch(console.error); 
+testAuth(); 

@@ -81,8 +81,8 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
         },
         body: JSON.stringify({
           table_name: 'Users',
-          index_name: 'id-index',
-          key_name: 'id',
+          index_name: 'account_id-index',
+          key_name: 'account_id',
           key_value: session.user.account_id,
           account_id: session.user.account_id
         }),
@@ -113,8 +113,8 @@ export function ConversationsProvider({ children }: { children: React.ReactNode 
             },
             body: JSON.stringify({
               table_name: 'Users',
-              index_name: 'id-index',
-              key_name: 'id',
+              index_name: 'account_id-index',
+              key_name: 'account_id',
               key_value: session.user.account_id,
               update_data: { new_email: false },
               account_id: session.user.account_id

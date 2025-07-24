@@ -79,9 +79,48 @@ function userProfileReducer(state: UserProfileState, action: UserProfileAction):
     
     case 'OPTIMISTIC_UPDATE':
       if (!state.profile) return state;
+      
+      // Handle preferences merge safely
+      const mergedPreferences = action.payload.preferences && state.profile.preferences
+        ? {
+            ...state.profile.preferences,
+            ...action.payload.preferences,
+            // Ensure required fields are not undefined
+            email_notifications: action.payload.preferences.email_notifications ?? state.profile.preferences.email_notifications,
+            sms_notifications: action.payload.preferences.sms_notifications ?? state.profile.preferences.sms_notifications,
+            push_notifications: action.payload.preferences.push_notifications ?? state.profile.preferences.push_notifications,
+            ai_auto_response: action.payload.preferences.ai_auto_response ?? state.profile.preferences.ai_auto_response,
+            ai_tone: action.payload.preferences.ai_tone ?? state.profile.preferences.ai_tone,
+            ai_style: action.payload.preferences.ai_style ?? state.profile.preferences.ai_style,
+            theme: action.payload.preferences.theme ?? state.profile.preferences.theme,
+            language: action.payload.preferences.language ?? state.profile.preferences.language,
+            timezone: action.payload.preferences.timezone ?? state.profile.preferences.timezone,
+            profile_visibility: action.payload.preferences.profile_visibility ?? state.profile.preferences.profile_visibility,
+            data_sharing: action.payload.preferences.data_sharing ?? state.profile.preferences.data_sharing,
+          }
+        : state.profile.preferences;
+      
+      // Handle metadata merge safely
+      const mergedMetadata = action.payload.metadata && state.profile.metadata
+        ? {
+            ...state.profile.metadata,
+            ...action.payload.metadata,
+            // Ensure required fields are not undefined
+            login_count: action.payload.metadata.login_count ?? state.profile.metadata.login_count,
+            timezone: action.payload.metadata.timezone ?? state.profile.metadata.timezone,
+            locale: action.payload.metadata.locale ?? state.profile.metadata.locale,
+            ip_address: action.payload.metadata.ip_address ?? state.profile.metadata.ip_address,
+          }
+        : state.profile.metadata;
+      
       return {
         ...state,
-        profile: { ...state.profile, ...action.payload },
+        profile: { 
+          ...state.profile, 
+          ...action.payload,
+          preferences: mergedPreferences,
+          metadata: mergedMetadata
+        },
         isDirty: true
       };
     
@@ -99,7 +138,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
   const { data: session, status } = useSession();
   const { select, update } = useDbOperations();
   const [state, dispatch] = useReducer(userProfileReducer, initialState);
-  const userId = (session as any)?.user?.id;
+  const userId = (session as any)?.user?.account_id || (session as any)?.user?.id;
   const lastProfileRef = useRef<UserProfile | null>(null);
 
   // Fetch profile from Firestore
@@ -174,8 +213,8 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       
       const response = await update({
         table_name: 'Users',
-        index_name: 'id-index',
-        key_name: 'id',
+        index_name: 'account_id-index',
+        key_name: 'account_id',
         key_value: userId,
         update_data: updateData,
       });

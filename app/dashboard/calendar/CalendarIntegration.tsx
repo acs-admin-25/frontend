@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
 import { ErrorBoundary } from '@/components/common/Feedback/ErrorBoundary';
+import { toZonedTime, format } from 'date-fns-tz';
 
 interface CalendarIntegrationProps {
   className?: string;
@@ -209,21 +210,28 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
     });
     if (!response.ok) throw new Error('Failed to fetch Outlook events');
     const data = await response.json();
-    return (data.value || []).map((event: any) => ({
-      id: event.id,
-      title: event.subject || 'Untitled Event',
-      description: event.body?.content || '',
-      startTime: event.start?.dateTime ? new Date(event.start.dateTime) : null,
-      endTime: event.end?.dateTime ? new Date(event.end.dateTime) : null,
-      allDay: event.isAllDay || false,
-      location: event.location?.displayName || '',
-      attendees: event.attendees?.map((a: any) => a.emailAddress?.address).filter(Boolean) || [],
-      type: 'meeting',
-      status: 'scheduled',
-      source: 'outlook-calendar',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
+    return (data.value || []).map((event: any) => {
+      console.log('Raw Outlook event:', event.start?.dateTime, event.end?.dateTime);
+      return {
+        id: event.id,
+        title: event.subject || 'Untitled Event',
+        description: event.body?.content || '',
+        startTime: event.start?.dateTime ? cleanOutlookDateString(event.start.dateTime) : null,
+        endTime: event.end?.dateTime ? cleanOutlookDateString(event.end.dateTime) : null,
+        allDay: event.isAllDay || false,
+        location: event.location?.displayName || '',
+        attendees: event.attendees?.map((a: any) => a.emailAddress?.address).filter(Boolean) || [],
+        type: 'meeting',
+        status: 'scheduled',
+        source: 'outlook-calendar',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    });
+  }
+
+  function cleanOutlookDateString(dateString: string) {
+    return dateString.replace(/\.\d+$/, '');
   }
 
   const fetchAndDisplayOutlookEvents = async () => {
@@ -428,8 +436,7 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
                     <div>
                       <h4 className="font-medium">{event.title}</h4>
                       <p className="text-sm text-gray-600">
-                        {event.startTime.toLocaleDateString()} at{' '}
-                        {event.startTime.toLocaleTimeString()}
+                        {event.startTime ? format(toZonedTime(event.startTime, 'America/Los_Angeles'), 'hh:mm aaaa', { timeZone: 'America/Los_Angeles' }) : 'N/A'}
                       </p>
                       <p className="text-xs text-gray-500">
                         Source: {event.source}

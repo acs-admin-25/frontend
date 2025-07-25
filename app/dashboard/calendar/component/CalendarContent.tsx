@@ -35,16 +35,52 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { 
-  CalendarEvent, 
   AvailabilitySlot, 
   EventType, 
   EventStatus,
   CalendarIntegration as CalendarIntegrationType,
   AISchedulingPreferences,
-  CalendarFilters
+  CalendarFilters,
+  CalendarEvent
 } from "@/lib/types/calendar"
 import { CalendarIntegration } from "../CalendarIntegration"
-import type { CalendarEvent } from '@/lib/types/calendar';
+import { parse } from 'date-fns';
+import { toZonedTime, format } from 'date-fns-tz';
+// If you see a module error for 'date-fns-tz', run: npm install date-fns-tz
+
+// Utility functions for date handling (top-level scope)
+function parseEventString(dateString: string) {
+  return parse(dateString.replace(/\.\d+$/, ''), "yyyy-MM-dd'T'HH:mm:ss", new Date());
+}
+
+function formatEventTimeToPST(dateString: string) {
+  if (!dateString) return '';
+  const clean = dateString.replace(/\.\d+$/, '');
+  const utcDate = new Date(clean + 'Z'); // 👈 force UTC
+  const zoned = toZonedTime(utcDate, 'America/Los_Angeles');
+  return format(zoned, 'hh:mm aaaa', { timeZone: 'America/Los_Angeles' });
+}
+
+function formatEventDateToPST(dateInput: string | Date) {
+  let parsed: Date;
+  if (!dateInput) return '';
+  if (typeof dateInput === 'string') {
+    parsed = parseEventString(dateInput);
+  } else {
+    parsed = dateInput;
+  }
+  if (isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString('en-CA'); // yyyy-mm-dd
+}
+
+function isSameDayInPST(eventStart: string, gridDate: Date) {
+  const eventDate = parseEventString(eventStart);
+  return (
+    eventDate.getFullYear() === gridDate.getFullYear() &&
+    eventDate.getMonth() === gridDate.getMonth() &&
+    eventDate.getDate() === gridDate.getDate()
+  );
+}
 
 export default function CalendarContent() {
   // Store Outlook access token from URL in sessionStorage (for client-side fetch)
@@ -126,7 +162,7 @@ export default function CalendarContent() {
     return eventsToDisplay.filter(event => {
       const eventDate = new Date(event.startTime)
       return eventDate >= now && eventDate <= nextWeek
-    }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+    }).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
   }
 
   const upcomingEvents = getUpcomingEvents()
@@ -140,7 +176,7 @@ export default function CalendarContent() {
     return eventsToDisplay.filter(event => {
       const eventDate = new Date(event.startTime)
       return eventDate >= todayStart && eventDate < todayEnd
-    }).sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+    }).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
   }
 
   const todayEvents = getTodayEvents()
@@ -470,10 +506,7 @@ function CalendarGrid({
   }
 
   const getEventsForDate = (date: Date) => {
-    return events.filter(event => {
-      const eventDate = new Date(event.startTime)
-      return eventDate.toDateString() === date.toDateString()
-    })
+    return events.filter(event => isSameDayInPST(event.startTime, date));
   }
 
   return (
@@ -524,10 +557,7 @@ function CalendarGrid({
                     className="text-xs p-1 rounded bg-[#0e6537]/10 text-[#0e6537] cursor-pointer hover:bg-[#0e6537]/20 transition-colors truncate"
                     title={event.title}
                   >
-                    {new Date(event.startTime).toLocaleTimeString([], { 
-                      hour: '2-digit', 
-                      minute: '2-digit' 
-                    })} - {event.title}
+                    {formatEventTimeToPST(event.startTime)} - {event.title}
                   </div>
                 ))}
                 {dayEvents.length > 3 && (
@@ -573,11 +603,7 @@ function UpcomingEvents({
               <div className="flex-1">
                 <h4 className="font-medium text-gray-900 truncate">{event.title}</h4>
                 <p className="text-sm text-gray-500">
-                  {new Date(event.startTime).toLocaleDateString()} at{' '}
-                  {new Date(event.startTime).toLocaleTimeString([], { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                  })}
+                  {formatEventDateToPST(event.startTime)} at {formatEventTimeToPST(event.startTime)}
                 </p>
               </div>
               <div className="flex items-center gap-1">

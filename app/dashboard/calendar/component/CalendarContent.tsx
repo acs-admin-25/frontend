@@ -34,6 +34,8 @@ import { useCalendarData } from "@/lib/hooks/useCalendarData"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import type { 
   AvailabilitySlot, 
   EventType, 
@@ -41,11 +43,14 @@ import type {
   CalendarIntegration as CalendarIntegrationType,
   AISchedulingPreferences,
   CalendarFilters,
-  CalendarEvent
+  CalendarEvent,
+  EventSource
 } from "@/lib/types/calendar"
 import { CalendarIntegration } from "../CalendarIntegration"
 import { parse } from 'date-fns';
 import { toZonedTime, format } from 'date-fns-tz';
+import { onSnapshot, collection, query } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 // If you see a module error for 'date-fns-tz', run: npm install date-fns-tz
 
 // Utility functions for date handling (top-level scope)
@@ -54,27 +59,56 @@ function parseEventString(dateString: string) {
 }
 
 function formatEventTimeToPST(dateString: string) {
-  if (!dateString) return '';
+  if (!dateString) {
+    return '';
+  }
   const clean = dateString.replace(/\.\d+$/, '');
   const utcDate = new Date(clean + 'Z'); // 👈 force UTC
-  const zoned = toZonedTime(utcDate, 'America/Los_Angeles');
-  return format(zoned, 'hh:mm aaaa', { timeZone: 'America/Los_Angeles' });
+  if (isNaN(utcDate.getTime())) {
+    return '';
+  }
+  let zoned;
+  try {
+    zoned = toZonedTime(utcDate, 'America/Los_Angeles');
+  } catch (error) {
+    return '';
+  }
+  try {
+    const result = format(zoned, 'hh:mm aaaa', { timeZone: 'America/Los_Angeles' });
+    return result;
+  } catch (error) {
+    return '';
+  }
 }
 
 function formatEventDateToPST(dateInput: string | Date) {
   let parsed: Date;
-  if (!dateInput) return '';
+  if (!dateInput) {
+    return '';
+  }
   if (typeof dateInput === 'string') {
     parsed = parseEventString(dateInput);
   } else {
     parsed = dateInput;
   }
-  if (isNaN(parsed.getTime())) return '';
-  return parsed.toLocaleDateString('en-CA'); // yyyy-mm-dd
+  if (isNaN(parsed.getTime())) {
+    return '';
+  }
+  const result = parsed.toLocaleDateString('en-CA'); // yyyy-mm-dd
+  return result;
 }
 
-function isSameDayInPST(eventStart: string, gridDate: Date) {
-  const eventDate = parseEventString(eventStart);
+function isSameDayInPST(eventStart: string | Date, gridDate: Date) {
+  let eventDate: Date;
+  if (typeof eventStart === 'string') {
+    // Convert to PST properly
+    const clean = eventStart.replace(/\.\d+$/, '');
+    const utcDate = new Date(clean + 'Z'); // Force UTC
+    eventDate = toZonedTime(utcDate, 'America/Los_Angeles');
+  } else {
+    eventDate = eventStart;
+  }
+  
   return (
     eventDate.getFullYear() === gridDate.getFullYear() &&
     eventDate.getMonth() === gridDate.getMonth() &&
@@ -82,7 +116,12 @@ function isSameDayInPST(eventStart: string, gridDate: Date) {
   );
 }
 
+
+
 export default function CalendarContent() {
+  // Ensure this is the very first line in the component
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [currentViewDate, setCurrentViewDate] = useState(new Date());
   // Store Outlook access token from URL in sessionStorage (for client-side fetch)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -111,7 +150,7 @@ export default function CalendarContent() {
 
   // Use the centralized calendar data hook
   const {
-    events,
+    events: calendarEventsFromHook,
     googleEvents,
     calendlyEvents,
     loading,
@@ -130,7 +169,7 @@ export default function CalendarContent() {
   })
 
   // For now, use only Outlook events for display
-  const eventsToDisplay: CalendarEvent[] = clientOutlookEvents;
+  const eventsToDisplay: CalendarEvent[] = events;
 
   // Filter events based on search term
   const filteredEvents = eventsToDisplay.filter(
@@ -142,14 +181,8 @@ export default function CalendarContent() {
 
   // Get current month events for calendar grid
   const getCurrentMonthEvents = () => {
-    const now = new Date()
-    const currentMonth = now.getMonth()
-    const currentYear = now.getFullYear()
-    
-    return eventsToDisplay.filter(event => {
-      const eventDate = new Date(event.startTime)
-      return eventDate.getMonth() === currentMonth && eventDate.getFullYear() === currentYear
-    })
+    // Show all events, but we'll style them differently based on month
+    return eventsToDisplay
   }
 
   const currentMonthEvents = getCurrentMonthEvents()
@@ -185,6 +218,337 @@ export default function CalendarContent() {
   const handleFilterChange = (newFilters: Partial<CalendarFilters>) => {
     setFilters(prev => ({ ...prev, ...newFilters }))
   }
+
+  const goToPreviousMonth = () => {
+    setCurrentViewDate(prev => {
+      const newDate = new Date(prev)
+      newDate.setMonth(prev.getMonth() - 1)
+      return newDate
+    })
+  }
+
+  const goToNextMonth = () => {
+    setCurrentViewDate(prev => {
+      const newDate = new Date(prev)
+      newDate.setMonth(prev.getMonth() + 1)
+      return newDate
+    })
+  }
+
+  const goToToday = () => {
+    setCurrentViewDate(new Date())
+  }
+
+  // Force refresh events from Firestore
+  const forceRefreshEvents = async () => {
+    console.log('🔄 Force refreshing events...');
+    try {
+      // Clear events state immediately
+      console.log('🗑️ Clearing current events state...');
+      setEvents([]);
+      
+      // Wait a moment for the clear to take effect
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      const { fetchCalendarEvents } = await import('@/lib/firebaseEvents');
+      const freshEvents = await fetchCalendarEvents();
+      console.log('📅 Force refreshed events:', freshEvents.length);
+      console.log('📅 Fresh events details:', freshEvents.map((e: any) => ({ id: e.id, title: e.title, source: e.source })));
+      
+      // Set new events with multiple re-renders to ensure UI updates
+      setEvents(freshEvents.map((doc: any) => ({
+        id: doc.id,
+        title: typeof doc.title === 'string' ? doc.title : 'Untitled Event',
+        description: typeof doc.description === 'string' ? doc.description : '',
+        startTime: typeof doc.startTime === 'string' ? doc.startTime : new Date().toISOString(),
+        endTime: typeof doc.endTime === 'string' ? doc.endTime : new Date().toISOString(),
+        allDay: typeof doc.allDay === 'boolean' ? doc.allDay : false,
+        location: typeof doc.location === 'string' ? doc.location : '',
+        attendees: Array.isArray(doc.attendees) ? doc.attendees : [],
+        type: (['property-viewing','consultation','offer-presentation','contract-signing','follow-up','meeting','appointment','custom'].includes(doc.type)) ? doc.type as EventType : 'meeting',
+        status: (['scheduled','confirmed','pending','cancelled','completed','no-show'].includes(doc.status)) ? doc.status as EventStatus : 'scheduled',
+        source: (['manual','calendly','google-calendar','ai-scheduled','imported'].includes(doc.source)) ? doc.source as EventSource : 'imported',
+        externalId: typeof doc.externalId === 'string' ? doc.externalId : undefined,
+        recurrence: doc.recurrence || undefined,
+        color: typeof doc.color === 'string' ? doc.color : undefined,
+        notes: typeof doc.notes === 'string' ? doc.notes : undefined,
+        clientId: typeof doc.clientId === 'string' ? doc.clientId : undefined,
+        leadId: typeof doc.leadId === 'string' ? doc.leadId : undefined,
+        timeZone: typeof doc.timeZone === 'string' ? doc.timeZone : undefined,
+        sourceId: typeof doc.sourceId === 'string' ? doc.sourceId : undefined,
+        sourceUrl: typeof doc.sourceUrl === 'string' ? doc.sourceUrl : undefined,
+        isAllDay: typeof doc.isAllDay === 'boolean' ? doc.isAllDay : undefined,
+        metadata: typeof doc.metadata === 'object' ? doc.metadata : undefined,
+        createdAt: doc.createdAt ? new Date(doc.createdAt) : new Date(),
+        updatedAt: doc.updatedAt ? new Date(doc.updatedAt) : new Date(),
+      })));
+      
+      console.log('📅 Events state updated with fresh data');
+      
+      // Force additional re-renders to ensure UI updates
+      setTimeout(() => {
+        console.log('🔄 Forcing additional re-render...');
+        setEvents(prevEvents => [...prevEvents]);
+      }, 300);
+      
+      setTimeout(() => {
+        console.log('🔄 Forcing final re-render...');
+        setEvents(prevEvents => [...prevEvents]);
+      }, 600);
+      
+    } catch (error) {
+      console.error('❌ Force refresh failed:', error);
+    }
+  };
+
+  // Simple page refresh as backup
+  const refreshPage = () => {
+    console.log('🔄 Refreshing page...');
+    window.location.reload();
+  };
+
+  // Event modal handlers
+  const handleCreateEvent = () => {
+    setSelectedEvent(null);
+    setShowEventModal(true);
+  };
+
+  const handleEditEvent = (event: CalendarEvent) => {
+    console.log('📝 Editing event:', event);
+    console.log('📝 Event ID:', event.id);
+    setSelectedEvent(event);
+    setShowEventModal(true);
+  };
+
+  const handleSaveEvent = (event: CalendarEvent) => {
+    console.log('✅ Event saved callback triggered:', event);
+    console.log('✅ Event ID:', event.id);
+    console.log('✅ Event title:', event.title);
+    setShowEventModal(false);
+    setSelectedEvent(null);
+    
+    // Force a refresh to ensure the UI updates
+    setTimeout(() => {
+      console.log('🔄 Forcing event refresh...');
+      forceRefreshEvents();
+    }, 500);
+  };
+
+  const handleDeleteEvent = async (event: CalendarEvent) => {
+    try {
+      console.log('🗑️ Attempting to delete event:', event);
+      console.log('🗑️ Event ID:', event.id);
+      console.log('🗑️ Event externalId:', event.externalId);
+      
+      if (!event.id) {
+        throw new Error('Event ID is missing. Cannot delete event without an ID.');
+      }
+      
+      // Delete from local calendar (Firestore) first
+      const { deleteCalendarEvent } = await import('@/lib/firebaseEvents');
+      await deleteCalendarEvent(event.id);
+      console.log('🗑️ Event deleted from local calendar:', event.title);
+      
+      // Delete from Outlook if connected
+      const accessToken = sessionStorage.getItem('outlookAccessToken');
+      if (accessToken) {
+        let outlookEventId = event.externalId;
+        
+        // If no externalId, try to find the event in Outlook
+        if (!outlookEventId) {
+          console.log('🔍 No externalId found, searching for event in Outlook...');
+          const foundId = await findOutlookEventId(event.title, typeof event.startTime === 'string' ? event.startTime : event.startTime.toISOString(), accessToken);
+          outlookEventId = foundId || undefined;
+        }
+        
+        if (outlookEventId && outlookEventId !== null) {
+          try {
+            console.log('🗑️ Deleting from Outlook with ID:', outlookEventId);
+            const response = await fetch(`https://graph.microsoft.com/v1.0/me/events/${outlookEventId}`, {
+              method: 'DELETE',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              }
+            });
+            
+            if (response.ok) {
+              console.log('✅ Event deleted from Outlook successfully');
+            } else if (response.status === 404) {
+              console.log('ℹ️ Event not found in Outlook (already deleted or never existed)');
+            } else {
+              console.warn('⚠️ Failed to delete event from Outlook:', response.status, response.statusText);
+            }
+          } catch (error) {
+            console.warn('⚠️ Error deleting from Outlook:', error);
+          }
+        } else {
+          console.log('ℹ️ Could not find matching event in Outlook');
+        }
+      } else {
+        console.log('ℹ️ No Outlook connection, skipping Outlook deletion');
+      }
+      
+      setShowEventModal(false);
+      setSelectedEvent(null);
+    } catch (error) {
+      console.error('❌ Error deleting event:', error);
+      alert('Failed to delete event: ' + (error instanceof Error ? error.message : error));
+    }
+  };
+
+  const handleCloseEventModal = () => {
+    setShowEventModal(false);
+    setSelectedEvent(null);
+  };
+
+  // Helper function to find Outlook event by title and time
+  const findOutlookEventId = async (title: string, startTime: string, accessToken: string): Promise<string | null> => {
+    try {
+      console.log('🔍 Searching for Outlook event:', title, startTime);
+      
+      // Search for events in the last 30 days and next 30 days
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() + 30);
+      
+      const response = await fetch(
+        `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${startDate.toISOString()}&endDateTime=${endDate.toISOString()}&$top=100`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const events = data.value || [];
+        
+        // Find matching event by title and start time
+        const matchingEvent = events.find((event: any) => {
+          const eventStart = new Date(event.start.dateTime);
+          const targetStart = new Date(startTime);
+          const timeDiff = Math.abs(eventStart.getTime() - targetStart.getTime());
+          
+          return event.subject === title && timeDiff < 60000; // Within 1 minute
+        });
+        
+        if (matchingEvent) {
+          console.log('✅ Found matching Outlook event:', matchingEvent.id);
+          return matchingEvent.id;
+        } else {
+          console.log('❌ No matching Outlook event found');
+          return null;
+        }
+      } else {
+        console.warn('⚠️ Failed to search Outlook events:', response.status);
+        return null;
+      }
+    } catch (error) {
+      console.error('❌ Error searching Outlook events:', error);
+      return null;
+    }
+  };
+
+
+
+
+
+  // Firestore real-time subscription for calendar events
+  useEffect(() => {
+    console.log('🔄 Setting up Firestore listener...');
+    const q = query(collection(db, 'calendarEvents'));
+    
+    // Track previous event count for deletion detection
+    let previousEventCount = 0;
+    let isFirstLoad = true;
+    
+    const unsubscribe = onSnapshot(q, (querySnapshot) => {
+      const currentEventCount = querySnapshot.docs.length;
+      console.log('📅 Firestore update received:', currentEventCount, 'events');
+      
+      if (!isFirstLoad) {
+        console.log('📅 Previous event count:', previousEventCount);
+        
+        // Check if this might be a deletion
+        if (currentEventCount < previousEventCount) {
+          console.log('🗑️ DELETION DETECTED: Event count decreased from', previousEventCount, 'to', currentEventCount);
+        }
+      } else {
+        console.log('📅 First load - setting initial count');
+        isFirstLoad = false;
+      }
+      
+      const events = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        const event = {
+          id: doc.id,
+          title: typeof data.title === 'string' ? data.title : 'Untitled Event',
+          description: typeof data.description === 'string' ? data.description : '',
+          startTime: typeof data.startTime === 'string' ? data.startTime : new Date().toISOString(),
+          endTime: typeof data.endTime === 'string' ? data.endTime : new Date().toISOString(),
+          allDay: typeof data.allDay === 'boolean' ? data.allDay : false,
+          location: typeof data.location === 'string' ? data.location : '',
+          attendees: Array.isArray(data.attendees) ? data.attendees : [],
+          type: (['property-viewing','consultation','offer-presentation','contract-signing','follow-up','meeting','appointment','custom'].includes(data.type)) ? data.type as EventType : 'meeting',
+          status: (['scheduled','confirmed','pending','cancelled','completed','no-show'].includes(data.status)) ? data.status as EventStatus : 'scheduled',
+          source: (['manual','calendly','google-calendar','ai-scheduled','imported'].includes(data.source)) ? data.source as EventSource : 'imported',
+          externalId: typeof data.externalId === 'string' ? data.externalId : undefined,
+          recurrence: data.recurrence || undefined,
+          color: typeof data.color === 'string' ? data.color : undefined,
+          notes: typeof data.notes === 'string' ? data.notes : undefined,
+          clientId: typeof data.clientId === 'string' ? data.clientId : undefined,
+          leadId: typeof data.leadId === 'string' ? data.leadId : undefined,
+          timeZone: typeof data.timeZone === 'string' ? data.timeZone : undefined,
+          sourceId: typeof data.sourceId === 'string' ? data.sourceId : undefined,
+          sourceUrl: typeof data.sourceUrl === 'string' ? data.sourceUrl : undefined,
+          isAllDay: typeof data.isAllDay === 'boolean' ? data.isAllDay : undefined,
+          metadata: typeof data.metadata === 'object' ? data.metadata : undefined,
+          createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+          updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+        };
+        
+        console.log('📅 Mapped event:', { id: event.id, title: event.title, startTime: event.startTime });
+        return event;
+      });
+      
+      console.log('📅 Setting events state with:', events.length, 'events');
+      console.log('📅 Event titles:', events.map(e => e.title));
+      
+      // Force a state update to ensure UI re-renders
+      setEvents([...events]); // Use spread operator to ensure new array reference
+      
+      // If deletion was detected, force additional re-renders
+      if (!isFirstLoad && currentEventCount < previousEventCount) {
+        console.log('🔄 Forcing UI update after deletion...');
+        setTimeout(() => {
+          console.log('🔄 Forcing second re-render after deletion...');
+          setEvents(prevEvents => [...prevEvents]); // Force another re-render
+        }, 100);
+        
+        setTimeout(() => {
+          console.log('🔄 Forcing third re-render after deletion...');
+          setEvents(prevEvents => [...prevEvents]); // Force another re-render
+        }, 500);
+      }
+      
+      // Update previous count for next comparison
+      previousEventCount = currentEventCount;
+    }, (error) => {
+      console.error('❌ Firestore listener error:', error);
+    });
+    
+    console.log('✅ Firestore listener set up successfully');
+    return () => {
+      console.log('🔄 Cleaning up Firestore listener...');
+      unsubscribe();
+    };
+  }, []); // or [activeTab] if you want to re-subscribe on tab change
+
+
 
   if (loading) {
     return (
@@ -224,14 +588,25 @@ export default function CalendarContent() {
             </div>
             <div className="flex items-center gap-2">
               <Button
-                onClick={refetch}
+                onClick={forceRefreshEvents}
                 variant="outline"
                 size="sm"
                 className="flex items-center gap-2"
               >
                 <RefreshCw className="h-4 w-4" />
-                Refresh
+                Refresh Events
               </Button>
+              <Button
+                onClick={refreshPage}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Refresh Page
+              </Button>
+
+
               <Button
                 onClick={() => setShowIntegrationModal(true)}
                 variant="outline"
@@ -380,11 +755,43 @@ export default function CalendarContent() {
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <CalendarGrid 
-                          events={currentMonthEvents} 
-                          onEventClick={setSelectedEvent}
-                          view={view}
-                        />
+                        <div className="space-y-4">
+                          {/* Navigation Controls */}
+                          <div className="flex items-center justify-between">
+                            <Button
+                              onClick={goToPreviousMonth}
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2"
+                            >
+                              <ChevronLeft className="h-4 w-4" />
+                              Previous
+                            </Button>
+                            
+                            <div className="flex items-center gap-4">
+                              <h3 className="text-lg font-semibold">
+                                {currentViewDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                              </h3>
+                            </div>
+                            
+                            <Button
+                              onClick={goToNextMonth}
+                              variant="outline"
+                              size="sm"
+                              className="flex items-center gap-2"
+                            >
+                              Next
+                              <ChevronRight className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          
+                          <CalendarGrid 
+                            events={currentMonthEvents} 
+                            onEventClick={handleEditEvent}
+                            view={view}
+                            currentViewDate={currentViewDate}
+                          />
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
@@ -402,7 +809,7 @@ export default function CalendarContent() {
                       <CardContent>
                         <UpcomingEvents 
                           events={todayEvents} 
-                          onEventClick={setSelectedEvent}
+                          onEventClick={handleEditEvent}
                           maxEvents={5}
                         />
                       </CardContent>
@@ -419,7 +826,7 @@ export default function CalendarContent() {
                       <CardContent>
                         <UpcomingEvents 
                           events={upcomingEvents} 
-                          onEventClick={setSelectedEvent}
+                          onEventClick={handleEditEvent}
                           maxEvents={5}
                         />
                       </CardContent>
@@ -432,7 +839,7 @@ export default function CalendarContent() {
                       </CardHeader>
                       <CardContent className="space-y-2">
                         <Button 
-                          onClick={() => setShowEventModal(true)} 
+                          onClick={handleCreateEvent} 
                           className="w-full justify-start"
                           variant="outline"
                         >
@@ -476,6 +883,16 @@ export default function CalendarContent() {
           </Tabs>
         </div>
       </div>
+
+      {/* Modals */}
+      {showEventModal && (
+        <EventModal
+          event={selectedEvent}
+          onClose={handleCloseEventModal}
+          onSave={handleSaveEvent}
+          onDelete={handleDeleteEvent}
+        />
+      )}
     </ErrorBoundary>
   )
 }
@@ -484,17 +901,19 @@ export default function CalendarContent() {
 function CalendarGrid({ 
   events, 
   onEventClick,
-  view
+  view,
+  currentViewDate
 }: { 
   events: CalendarEvent[]
   onEventClick: (event: CalendarEvent) => void
   view: 'month' | 'week' | 'day' | 'agenda'
+  currentViewDate: Date
 }) {
   const today = new Date()
-  const currentMonth = today.getMonth()
-  const currentYear = today.getFullYear()
-  const firstDay = new Date(currentYear, currentMonth, 1)
-  const lastDay = new Date(currentYear, currentMonth + 1, 0)
+  const viewMonth = currentViewDate.getMonth()
+  const viewYear = currentViewDate.getFullYear()
+  const firstDay = new Date(viewYear, viewMonth, 1)
+  const lastDay = new Date(viewYear, viewMonth + 1, 0)
   const startDate = new Date(firstDay)
   startDate.setDate(startDate.getDate() - firstDay.getDay())
 
@@ -524,7 +943,7 @@ function CalendarGrid({
       <div className="grid grid-cols-7 gap-px bg-gray-200">
         {days.map((date, index) => {
           const isToday = date.toDateString() === today.toDateString()
-          const isCurrentMonth = date.getMonth() === currentMonth
+          const isCurrentMonth = date.getMonth() === viewMonth
           const dayEvents = getEventsForDate(date)
 
           return (
@@ -550,16 +969,18 @@ function CalendarGrid({
 
               {/* Events */}
               <div className="space-y-1">
-                {dayEvents.slice(0, 3).map((event) => (
-                  <div
-                    key={event.id}
-                    onClick={() => onEventClick(event)}
-                    className="text-xs p-1 rounded bg-[#0e6537]/10 text-[#0e6537] cursor-pointer hover:bg-[#0e6537]/20 transition-colors truncate"
-                    title={event.title}
-                  >
-                    {formatEventTimeToPST(event.startTime)} - {event.title}
-                  </div>
-                ))}
+                {dayEvents.slice(0, 3).map((event) => {
+                  return (
+                    <div
+                      key={event.id}
+                      onClick={() => onEventClick(event)}
+                      className="text-xs p-1 rounded bg-[#0e6537]/10 text-[#0e6537] cursor-pointer hover:bg-[#0e6537]/20 transition-colors truncate"
+                      title={`${event.title} - Click to edit`}
+                    >
+                      {formatEventTimeToPST(typeof event.startTime === 'string' ? event.startTime : event.startTime.toISOString())} - {event.title}
+                    </div>
+                  )
+                })}
                 {dayEvents.length > 3 && (
                   <div className="text-xs text-gray-500 text-center">
                     +{dayEvents.length - 3} more
@@ -603,7 +1024,7 @@ function UpcomingEvents({
               <div className="flex-1">
                 <h4 className="font-medium text-gray-900 truncate">{event.title}</h4>
                 <p className="text-sm text-gray-500">
-                  {formatEventDateToPST(event.startTime)} at {formatEventTimeToPST(event.startTime)}
+                  {formatEventDateToPST(event.startTime)} at {formatEventTimeToPST(typeof event.startTime === 'string' ? event.startTime : event.startTime.toISOString())}
                 </p>
               </div>
               <div className="flex items-center gap-1">
@@ -630,38 +1051,239 @@ function UpcomingEvents({
 
 // Placeholder Modal Components (to be implemented)
 function EventModal({ event, onClose, onSave, onDelete }: any) {
+  const [formData, setFormData] = useState({
+    title: event?.title || '',
+    startDate: event?.startTime ? new Date(event.startTime).toISOString().split('T')[0] : '',
+    startTime: event?.startTime ? new Date(event.startTime).toISOString().split('T')[1].substring(0, 5) : '',
+    endDate: event?.endTime ? new Date(event.endTime).toISOString().split('T')[0] : '',
+    endTime: event?.endTime ? new Date(event.endTime).toISOString().split('T')[1].substring(0, 5) : '',
+    allDay: event?.allDay || false
+  });
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+
+    try {
+      // Create event object
+      const newEvent = {
+        title: formData.title,
+        startTime: new Date(`${formData.startDate}T${formData.startTime}`).toISOString(),
+        endTime: new Date(`${formData.endDate}T${formData.endTime}`).toISOString(),
+        allDay: formData.allDay,
+        type: 'meeting' as EventType,
+        status: 'scheduled' as EventStatus,
+        source: 'manual' as EventSource,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      // Save to local calendar (Firestore) first
+      const { saveCalendarEvent } = await import('@/lib/firebaseEvents');
+      const localEventId = await saveCalendarEvent(newEvent);
+
+      // Save to Outlook if connected
+      const accessToken = sessionStorage.getItem('outlookAccessToken');
+      if (accessToken) {
+        try {
+          console.log('📧 Creating event in Outlook...');
+          
+          // Create Outlook event using Microsoft Graph API
+          const outlookEvent = {
+            subject: newEvent.title,
+            start: {
+              dateTime: newEvent.startTime,
+              timeZone: 'America/Los_Angeles'
+            },
+            end: {
+              dateTime: newEvent.endTime,
+              timeZone: 'America/Los_Angeles'
+            }
+          };
+
+          const response = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(outlookEvent)
+          });
+
+          if (response.ok) {
+            const outlookResult = await response.json();
+            console.log('✅ Event created in Outlook:', outlookResult.id);
+            
+            // Update the local event with the Outlook event ID for future deletion
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const eventRef = doc(db, 'calendarEvents', localEventId);
+            await updateDoc(eventRef, { externalId: outlookResult.id });
+            console.log('✅ Updated local event with Outlook ID:', outlookResult.id);
+          } else {
+            const errorText = await response.text();
+            console.warn('⚠️ Failed to create event in Outlook:', response.status, errorText);
+          }
+        } catch (error) {
+          console.warn('⚠️ Error creating Outlook event:', error);
+        }
+      } else {
+        console.log('ℹ️ No Outlook connection, event created locally only');
+      }
+
+      // Create a complete event object with the ID for the callback
+      const completeEvent = {
+        ...newEvent,
+        id: localEventId
+      };
+      
+      console.log('✅ Event created successfully with ID:', localEventId);
+      onSave(completeEvent);
+    } catch (error) {
+      console.error('❌ Error creating event:', error);
+      alert('Failed to create event: ' + error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleInputChange = (field: string, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 className="text-xl font-bold mb-4">
-          {event ? 'Edit Event' : 'New Event'}
-        </h2>
-        <p className="text-gray-600 mb-4">Event modal implementation needed</p>
-        <div className="flex gap-2">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">
+            {event ? 'Edit Event' : 'Create New Event'}
+          </h2>
           <button
             onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="text-gray-400 hover:text-gray-600"
           >
-            Cancel
-          </button>
-          {event && (
-            <button
-              onClick={onDelete}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-            >
-              Delete
-            </button>
-          )}
-          <button
-            onClick={() => onSave({ title: 'Test Event' })}
-            className="px-4 py-2 bg-[#0e6537] text-white rounded-lg hover:bg-[#157a42]"
-          >
-            Save
+            <XCircle className="h-6 w-6" />
           </button>
         </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Title */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Event Title *
+            </label>
+            <Input
+              type="text"
+              value={formData.title}
+              onChange={(e) => handleInputChange('title', e.target.value)}
+              placeholder="Enter event title"
+              required
+              className="w-full"
+            />
+          </div>
+
+          {/* Date and Time */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Date *
+              </label>
+              <Input
+                type="date"
+                value={formData.startDate}
+                onChange={(e) => handleInputChange('startDate', e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Start Time *
+              </label>
+              <Input
+                type="time"
+                value={formData.startTime}
+                onChange={(e) => handleInputChange('startTime', e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Date *
+              </label>
+              <Input
+                type="date"
+                value={formData.endDate}
+                onChange={(e) => handleInputChange('endDate', e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                End Time *
+              </label>
+              <Input
+                type="time"
+                value={formData.endTime}
+                onChange={(e) => handleInputChange('endTime', e.target.value)}
+                required
+                className="w-full"
+              />
+            </div>
+          </div>
+
+          {/* All Day Toggle */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="allDay"
+              checked={formData.allDay}
+              onChange={(e) => handleInputChange('allDay', e.target.checked)}
+              className="h-4 w-4 text-[#0e6537] focus:ring-[#0e6537] border-gray-300 rounded"
+            />
+            <label htmlFor="allDay" className="ml-2 text-sm text-gray-700">
+              All day event
+            </label>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex gap-3 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            {event && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => onDelete(event)}
+                className="flex-1"
+              >
+                Delete
+              </Button>
+            )}
+            <Button
+              type="submit"
+              disabled={isSaving}
+              className="flex-1 bg-[#0e6537] hover:bg-[#157a42] text-white"
+            >
+              {isSaving ? 'Saving...' : 'Save Event'}
+            </Button>
+          </div>
+        </form>
       </div>
     </div>
-  )
+  );
 }
 
 function AvailabilityModal({ slot, onClose, onSave, onDelete }: any) {

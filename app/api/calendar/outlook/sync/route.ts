@@ -123,6 +123,30 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         };
 
+        // Prevent duplicate: check if event with same externalId and user_email exists
+        const existingResponse = await fetch(`${process.env.NEXTAUTH_URL_DEV || 'http://localhost:3000'}/api/db/select`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cookie': request.headers.get('cookie') || '',
+          },
+          body: JSON.stringify({
+            table_name: 'CalendarEvents',
+            index_name: 'externalId-user_email-index',
+            key_name: 'externalId',
+            key_value: calendarEvent.externalId,
+            filter: { user_email: session.user.email },
+          }),
+        });
+
+        if (existingResponse.ok) {
+          const existingData = await existingResponse.json();
+          if (existingData.success && existingData.data?.items?.length > 0) {
+            // Duplicate found, skip saving
+            continue;
+          }
+        }
+
         // Save event to database
         const saveResponse = await fetch(`${process.env.NEXTAUTH_URL_DEV || 'http://localhost:3000'}/api/db/update`, {
           method: 'POST',

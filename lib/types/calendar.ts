@@ -6,8 +6,8 @@ import type { BaseEntity } from './common';
 export interface CalendarEvent extends BaseEntity {
   title: string;
   description?: string;
-  startTime: Date;
-  endTime: Date;
+  startTime: Date | string;
+  endTime: Date | string;
   allDay: boolean;
   location?: string;
   attendees?: string[];

@@ -49,22 +49,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Get Outlook integration from database
-    const integrationResponse = await fetch(`${process.env.NEXTAUTH_URL_DEV || 'http://localhost:3000'}/api/db/select`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Cookie': request.headers.get('cookie') || '',
-      },
-      body: JSON.stringify({
-        table_name: 'CalendarIntegrations',
-        index_name: 'user-email-type-index',
-        key_name: 'user_email',
-        key_value: session.user.email,
-      }),
+    const integrationResponse = await apiClient.dbSelect({
+      table_name: 'CalendarIntegrations',
+      index_name: 'user-email-type-index',
+      key_name: 'user_email',
+      key_value: session.user.email,
     });
 
-    if (!integrationResponse.ok) {
-      console.error('[outlook/connection] Failed to fetch integration:', await integrationResponse.text());
+    if (!integrationResponse.success) {
+      console.error('[outlook/connection] Failed to fetch integration:', integrationResponse.error);
       return NextResponse.json({
         success: true,
         data: {
@@ -76,7 +69,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const integrationData = await integrationResponse.json();
+    const integrationData = integrationResponse;
     const outlookIntegration = integrationData.success && integrationData.data?.items?.find(
       (integration: any) => integration.type === 'outlook-calendar'
     );

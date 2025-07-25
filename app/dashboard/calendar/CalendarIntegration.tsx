@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/common/Feedback/LoadingSpinner';
 import { ErrorBoundary } from '@/components/common/Feedback/ErrorBoundary';
 import { toZonedTime, format } from 'date-fns-tz';
+import { saveCalendarEvent, fetchCalendarEvents, deleteCalendarEvent } from '@/lib/firebaseEvents';
 
 interface CalendarIntegrationProps {
   className?: string;
@@ -22,6 +23,7 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
     isConnected: boolean;
     integration: any;
   }>({ isConnected: false, integration: null });
+  const [isAutoFetching, setIsAutoFetching] = useState(false);
 
   const {
     events,
@@ -44,21 +46,79 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
   // Load Outlook connection status and events
   useEffect(() => {
     loadOutlookStatus();
+    
+    // Also check if we have an access token in sessionStorage
+    const accessToken = sessionStorage.getItem('outlookAccessToken');
+    if (accessToken) {
+      setOutlookConnectionStatus(prev => ({
+        ...prev,
+        isConnected: true
+      }));
+    }
+    
+    // Set up periodic check for connection status
+    const checkConnectionStatus = () => {
+      const token = sessionStorage.getItem('outlookAccessToken');
+      if (token) {
+        setOutlookConnectionStatus(prev => ({
+          ...prev,
+          isConnected: true
+        }));
+      }
+    };
+    
+    // Check immediately and then every 2 seconds for the first 10 seconds
+    checkConnectionStatus();
+    const interval = setInterval(checkConnectionStatus, 2000);
+    
+    // Clear interval after 10 seconds
+    setTimeout(() => clearInterval(interval), 10000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  // After OAuth callback, store access token in sessionStorage (in callback page or useEffect)
+  // After OAuth callback, store access token in sessionStorage and auto-fetch events
   useEffect(() => {
     // Check for access token in URL or window object (if you pass it from callback)
     const params = new URLSearchParams(window.location.search);
     const token = params.get('outlook_access_token');
     if (token) {
       sessionStorage.setItem('outlookAccessToken', token);
+      // Clean up the URL
+      params.delete('outlook_access_token');
+      const newUrl = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, '');
+      window.history.replaceState({}, '', newUrl);
+      
+      // Immediately update connection status
+      setOutlookConnectionStatus(prev => ({
+        ...prev,
+        isConnected: true
+      }));
+      
+      // Automatically fetch Outlook events after successful connection
+      setTimeout(() => {
+        fetchAndDisplayOutlookEvents(false); // Don't show alerts for auto-fetch
+      }, 1000); // Small delay to ensure token is stored
     }
   }, []);
 
   const loadOutlookStatus = async () => {
     try {
       const response = await fetch('/api/calendar/outlook/connection');
+      
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        console.error('Outlook status API error:', response.status, response.statusText);
+        return;
+      }
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Outlook status API returned non-JSON response:', contentType);
+        return;
+      }
+      
       const result = await response.json();
       
       if (result.success) {
@@ -75,6 +135,20 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
   const loadOutlookEvents = async () => {
     try {
       const response = await fetch('/api/calendar/outlook?events=true');
+      
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        console.error('Outlook events API error:', response.status, response.statusText);
+        return;
+      }
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Outlook events API returned non-JSON response:', contentType);
+        return;
+      }
+      
       const result = await response.json();
       
       if (result.success && result.data.events) {
@@ -90,6 +164,20 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
       const response = await fetch('/api/calendar/outlook/sync', {
         method: 'POST'
       });
+      
+      // Check if response is ok before parsing JSON
+      if (!response.ok) {
+        console.error('Outlook sync API error:', response.status, response.statusText);
+        return;
+      }
+      
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.error('Outlook sync API returned non-JSON response:', contentType);
+        return;
+      }
+      
       const result = await response.json();
       
       if (result.success) {
@@ -198,20 +286,43 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
   // Helper to fetch events from Microsoft Graph API
   async function fetchOutlookEventsClient(accessToken: string) {
     const startTime = new Date();
-    startTime.setDate(startTime.getDate() - 30);
+    startTime.setDate(startTime.getDate() - 60); // Increased to 60 days back
     const endTime = new Date();
-    endTime.setDate(endTime.getDate() + 90);
-    const url = `https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=${startTime.toISOString()}&endDateTime=${endTime.toISOString()}`;
+    endTime.setDate(endTime.getDate() + 120); // Increased to 120 days forward
+    
+    console.log('Fetching Outlook events from:', startTime.toISOString(), 'to:', endTime.toISOString());
+    
+    // Add parameters to force fresh data and increase limit
+    const timestamp = new Date().getTime();
+    const url = `https://graph.microsoft.com/v1.0/me/events?$filter=start/dateTime ge '${startTime.toISOString()}' and end/dateTime le '${endTime.toISOString()}'&$top=100&$orderby=start/dateTime&_t=${timestamp}`;
+    console.log('🔍 Making request to Microsoft Graph API...');
+    console.log('🔍 URL:', url);
+    console.log('🔍 Access token exists:', !!accessToken);
+    
     const response = await fetch(url, {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
       },
     });
-    if (!response.ok) throw new Error('Failed to fetch Outlook events');
+    
+    console.log('🔍 Response status:', response.status);
+    console.log('🔍 Response ok:', response.ok);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('🔍 Error response:', errorText);
+      throw new Error(`Failed to fetch Outlook events: ${response.status} ${response.statusText}`);
+    }
     const data = await response.json();
+    
+    console.log('Raw Microsoft Graph response:', data);
+    console.log('Total events in response:', data.value?.length || 0);
+    
     return (data.value || []).map((event: any) => {
-      console.log('Raw Outlook event:', event.start?.dateTime, event.end?.dateTime);
+      console.log('Raw Outlook event:', event.start?.dateTime, event.end?.dateTime, 'Subject:', event.subject);
       return {
         id: event.id,
         title: event.subject || 'Untitled Event',
@@ -224,6 +335,8 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
         type: 'meeting',
         status: 'scheduled',
         source: 'outlook-calendar',
+        externalId: event.id, // Add this for duplicate prevention
+        user_email: 'nayananona@gmail.com', // Add this for duplicate prevention
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -234,18 +347,132 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
     return dateString.replace(/\.\d+$/, '');
   }
 
-  const fetchAndDisplayOutlookEvents = async () => {
+  const fetchAndDisplayOutlookEvents = async (showAlert = true) => {
+    console.log('🚀 STARTING OUTLOOK FETCH - IMPROVED VERSION');
     const accessToken = sessionStorage.getItem('outlookAccessToken');
     if (!accessToken) {
-      alert('No Outlook access token found. Please connect Outlook first.');
+      if (showAlert) {
+        alert('No Outlook access token found. Please connect Outlook first.');
+      }
       return;
     }
+    
+    setIsAutoFetching(true);
     try {
-      const events = await fetchOutlookEventsClient(accessToken);
-      if (setClientOutlookEvents) setClientOutlookEvents(events);
-      alert(`Fetched ${events.length} Outlook events!`);
+      // Fetch fresh events from Outlook
+      const outlookEvents = await fetchOutlookEventsClient(accessToken);
+      console.log('📅 Fetched events from Outlook:', outlookEvents.length);
+      
+      // Get existing events from Firestore
+      const existingEvents = await fetchCalendarEvents();
+      const existingOutlookEvents = existingEvents.filter((e: any) => e.source === 'outlook-calendar');
+      console.log('🗄️ Existing Outlook events in Firestore:', existingOutlookEvents.length);
+      
+      let newEventsCount = 0;
+      let deletedEventsCount = 0;
+      
+      // Create maps for efficient lookup
+      const outlookEventMap = new Map();
+      const existingEventMap = new Map();
+      
+      // Map Outlook events by externalId for quick lookup
+      outlookEvents.forEach((event: any) => {
+        if (event.externalId) {
+          outlookEventMap.set(event.externalId, event);
+        }
+      });
+      
+      // Map existing events by externalId for quick lookup
+      existingOutlookEvents.forEach((event: any) => {
+        if (event.externalId) {
+          existingEventMap.set(event.externalId, event);
+        }
+      });
+      
+      // Find events to delete (exist in Firestore but not in Outlook)
+      const eventsToDelete = existingOutlookEvents.filter((event: any) => {
+        return event.externalId && !outlookEventMap.has(event.externalId);
+      });
+      
+      console.log('🗑️ Events to delete (removed from Outlook):', eventsToDelete.length);
+      eventsToDelete.forEach((event: any) => {
+        console.log('  - Deleting:', event.title, '(externalId:', event.externalId, ')');
+      });
+      
+      // Delete events that were removed from Outlook
+      for (const event of eventsToDelete) {
+        await deleteCalendarEvent(event.id);
+        deletedEventsCount++;
+      }
+      
+      // Find events to add (exist in Outlook but not in Firestore)
+      const eventsToAdd = outlookEvents.filter((event: any) => {
+        return event.externalId && !existingEventMap.has(event.externalId);
+      });
+      
+      console.log('➕ Events to add (new in Outlook):', eventsToAdd.length);
+      eventsToAdd.forEach((event: any) => {
+        console.log('  - Adding:', event.title, '(externalId:', event.externalId, ')');
+      });
+      
+      // Add new events from Outlook
+      for (const event of eventsToAdd) {
+        await saveCalendarEvent(event);
+        newEventsCount++;
+      }
+      
+      // Update client events if callback provided
+      if (setClientOutlookEvents) {
+        setClientOutlookEvents(outlookEvents);
+      }
+      
+      // Show results
+      if (showAlert) {
+        const message = `Sync completed!\n\n📊 Results:\n• Fetched ${outlookEvents.length} events from Outlook\n• Added ${newEventsCount} new events\n• Deleted ${deletedEventsCount} removed events\n\nYour calendar is now in sync with Outlook!`;
+        alert(message);
+        
+        // Force a page refresh to update the calendar display
+        console.log('🔄 Refreshing page to update calendar display...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        console.log(`Auto-sync completed: ${newEventsCount} added, ${deletedEventsCount} deleted`);
+      }
+      
+      // Update connection status
+      setOutlookConnectionStatus(prev => ({
+        ...prev,
+        isConnected: true
+      }));
+      
+      // Add manual cleanup function to window for debugging
+      (window as any).cleanupAllEvents = async () => {
+        console.log('🧹 MANUAL CLEANUP: Clearing all events...');
+        try {
+          const allEvents = await fetchCalendarEvents();
+          console.log('🧹 Found', allEvents.length, 'total events to delete');
+          
+          for (const event of allEvents) {
+            console.log('🗑️ Deleting:', (event as any).title, (event as any).source);
+            await deleteCalendarEvent(event.id);
+          }
+          
+          console.log('🧹 MANUAL CLEANUP: All events deleted!');
+          alert('All events have been cleared from the calendar!');
+        } catch (error) {
+          console.error('🧹 MANUAL CLEANUP failed:', error);
+        }
+      };
+      
     } catch (err) {
-      alert('Failed to fetch Outlook events: ' + err);
+      if (showAlert) {
+        alert('Failed to sync Outlook events: ' + err);
+      } else {
+        console.error('Auto-sync failed:', err);
+      }
+    } finally {
+      setIsAutoFetching(false);
     }
   };
 
@@ -349,28 +576,31 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
               <div>
                 <h4 className="font-medium">Outlook Calendar</h4>
                 <p className="text-sm text-gray-600">
-                  {outlookConnectionStatus.isConnected 
-                    ? `Connected (${outlookEvents.length} events)` 
+                  {isAutoFetching 
+                    ? 'Syncing events...' 
+                    : outlookConnectionStatus.isConnected 
+                    ? 'Connected' 
                     : 'Not connected'
                   }
                 </p>
               </div>
               <div className="space-x-2">
-                <Button
-                  onClick={handleConnectOutlook}
-                  disabled={isConnectingOutlook}
-                  variant="outline"
-                  size="sm"
-                >
-                  {isConnectingOutlook ? 'Connecting...' : 'Connect'}
-                </Button>
-                {outlookConnectionStatus.isConnected && (
+                {outlookConnectionStatus.isConnected ? (
                   <Button
-                    onClick={refreshOutlookEvents}
+                    variant="outline"
+                    size="sm"
+                    disabled
+                  >
+                    Connected
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleConnectOutlook}
+                    disabled={isConnectingOutlook}
                     variant="outline"
                     size="sm"
                   >
-                    Refresh
+                    {isConnectingOutlook ? 'Connecting...' : 'Connect'}
                   </Button>
                 )}
               </div>
@@ -470,7 +700,7 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
             <Button onClick={refetch} variant="outline" size="sm">
               Refresh All Data
             </Button>
-            <Button onClick={fetchAndDisplayOutlookEvents} variant="outline" size="sm">
+            <Button onClick={() => fetchAndDisplayOutlookEvents(true)} variant="outline" size="sm">
               Fetch Outlook Events (Client)
             </Button>
           </CardContent>

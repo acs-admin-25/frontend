@@ -292,8 +292,8 @@ async function syncOutlookEvents(userEmail: string): Promise<NextResponse> {
           id: crypto.randomUUID(),
           title: event.subject || 'Untitled Event',
           description: event.body?.content || '',
-          startTime: new Date(event.start.dateTime),
-          endTime: new Date(event.end.dateTime),
+          startTime: new Date(event.start.dateTime).toISOString(), // always ISO string with Z
+          endTime: new Date(event.end.dateTime).toISOString(),     // always ISO string with Z
           allDay: event.isAllDay || false,
           location: event.location?.displayName || '',
           attendees: event.attendees?.map((a: any) => a.emailAddress?.address).filter(Boolean) || [],
@@ -305,6 +305,19 @@ async function syncOutlookEvents(userEmail: string): Promise<NextResponse> {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
+
+        // Prevent duplicate: check if event with same externalId and user_email exists
+        const existing = await apiClient.dbSelect({
+          table_name: 'CalendarEvents',
+          index_name: 'externalId-user_email-index',
+          key_name: 'externalId',
+          key_value: calendarEvent.externalId,
+          filter: { user_email: userEmail },
+        });
+        if (existing.success && existing.data?.items?.length > 0) {
+          // Duplicate found, skip saving
+          continue;
+        }
 
         // Save event to database
         const saveResponse = await apiClient.dbUpdate({

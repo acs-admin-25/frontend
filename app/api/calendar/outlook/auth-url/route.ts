@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       'https://graph.microsoft.com/User.Read'
     ].join(' '));
     authUrl.searchParams.set('state', session.user.email); // Pass user email as state
+    authUrl.searchParams.set('prompt', 'select_account'); // Force account selection
 
     return NextResponse.json({
       success: true,

@@ -25,6 +25,7 @@ export interface LocationAutocompleteState {
   suggestions: LocationSuggestion[];
   isLoading: boolean;
   searchTimeout: NodeJS.Timeout | null;
+  error: string | null;
 }
 
 export interface LocationConstants {

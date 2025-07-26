@@ -1,5 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+// Add types for Nominatim API response and transformed locations
+interface NominatimResult {
+  place_id: number
+  osm_id: number
+  lat: string
+  lon: string
+  display_name: string
+  address?: { city?: string; town?: string; village?: string; state?: string; country?: string }
+  name?: string
+}
+interface TransformedLocation {
+  uniqueKey: string
+  city: string
+  state: string
+  country: string
+  fullAddress: string
+  lat: string
+  lon: string
+  score: number
+}
+type LocationSuggestion = Omit<TransformedLocation, 'score'>
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
@@ -36,11 +58,11 @@ export async function GET(request: NextRequest) {
       throw new Error(`Nominatim API responded with status: ${response.status}`)
     }
 
-    const data = await response.json()
-    
+    const data = await response.json() as NominatimResult[]
+
     // Transform and apply progressive triple filtering
-    const transformedData = data
-      .map((item: any) => {
+    const suggestions = data
+      .map((item: NominatimResult) => {
         const city = (item.address?.city || item.address?.town || item.address?.village || item.name || '').trim()
         const state = (item.address?.state || '').trim()
         const country = (item.address?.country || '').trim()
@@ -126,17 +148,18 @@ export async function GET(request: NextRequest) {
           score // Include score for sorting
         }
       })
-      .filter((item: any) => item !== null) // Remove null results
-      .sort((a: any, b: any) => b.score - a.score) // Sort by score (highest first)
-      .slice(0, 12) // Return top 12 results for more variety
-      .map(({ score, ...item }) => item); // Remove score from final output
+      .filter((item): item is TransformedLocation => item !== null)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 12)
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      .map(({ score: _, ...item }): LocationSuggestion => item)
 
-    return NextResponse.json(transformedData)
+    return NextResponse.json(suggestions)
   } catch (error) {
     console.error('Error fetching location suggestions:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch location suggestions' },
-      { status: 500 }
+      { error: 'The autocomplete service is not currently available. Please manually fill out the fields.' },
+      { status: 503 }
     )
   }
-} 
+}

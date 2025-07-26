@@ -7,9 +7,8 @@ import { useState, useCallback, useEffect } from 'react';
 import type { 
   LocationSuggestion, 
   LocationData, 
-  LocationAutocompleteState,
   LocationConstants 
-} from '@/types/location';
+} from '../types/location';
 
 // Move all hardcoded data into the hook
 const LOCATION_CONSTANTS: LocationConstants = {
@@ -30,6 +29,7 @@ export function useLocation() {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Debounced location search function
   const searchLocations = useCallback(async (query: string) => {
@@ -40,6 +40,7 @@ export function useLocation() {
     }
 
     setIsLoading(true);
+    setError(null); // Clear any previous errors
     
     try {
       // Use our local API route to avoid CORS issues
@@ -52,7 +53,7 @@ export function useLocation() {
         const processedSuggestions: LocationSuggestion[] = [];
         const seenCities = new Set<string>();
         
-        data.forEach((item: any) => {
+        data.forEach((item: LocationSuggestion) => {
           const city = item.city || '';
           const state = item.state || '';
           const country = item.country || '';
@@ -129,11 +130,18 @@ export function useLocation() {
         setSuggestions(limitedSuggestions);
         setIsDropdownOpen(limitedSuggestions.length > 0);
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Check if it's our graceful error response
+        if (response.status === 503) {
+          const errorData = await response.json();
+          setError(errorData.error || 'The autocomplete service is not currently available. Please manually fill out the fields.');
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
       }
     } catch (error) {
       console.error('Error fetching location suggestions:', error);
-      // Show error state but don't break the UI
+      // Set graceful error message for users
+      setError('The autocomplete service is not currently available. Please manually fill out the fields.');
       setSuggestions([]);
       setIsDropdownOpen(false);
     } finally {
@@ -141,8 +149,10 @@ export function useLocation() {
     }
   }, []);
 
+  // Clear error when user starts typing again
   const handleLocationChange = useCallback((value: string, onLocationChange: (value: string) => void) => {
     onLocationChange(value);
+    setError(null); // Clear error on new input
     
     // Clear existing timeout
     if (searchTimeout) {
@@ -161,6 +171,7 @@ export function useLocation() {
       setSuggestions([]);
       setIsDropdownOpen(false);
       setIsLoading(false);
+      setError(null);
     }
   }, [searchTimeout, searchLocations]);
 
@@ -174,12 +185,14 @@ export function useLocation() {
     setIsDropdownOpen(false);
     setSuggestions([]);
     setIsLoading(false);
+    setError(null); // Clear error on successful selection
   }, []);
 
   const closeDropdown = useCallback(() => {
     setIsDropdownOpen(false);
     setSuggestions([]);
     setIsLoading(false);
+    setError(null); // Clear error when closing dropdown
   }, []);
 
   // Clean up timeout on unmount
@@ -195,6 +208,7 @@ export function useLocation() {
     isDropdownOpen,
     suggestions,
     isLoading,
+    error,
     handleLocationChange,
     selectLocation,
     closeDropdown,

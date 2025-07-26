@@ -19,6 +19,7 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
   const [isConnectingCalendly, setIsConnectingCalendly] = useState(false);
   const [isConnectingOutlook, setIsConnectingOutlook] = useState(false);
   const [outlookEvents, setOutlookEvents] = useState<any[]>([]);
+  const [googleCalendarEvents, setGoogleCalendarEvents] = useState<any[]>([]);
   const [outlookConnectionStatus, setOutlookConnectionStatus] = useState<{
     isConnected: boolean;
     integration: any;
@@ -81,9 +82,11 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
   useEffect(() => {
     // Check for access token in URL or window object (if you pass it from callback)
     const params = new URLSearchParams(window.location.search);
-    const token = params.get('outlook_access_token');
-    if (token) {
-      sessionStorage.setItem('outlookAccessToken', token);
+    
+    // Handle Outlook OAuth callback
+    const outlookToken = params.get('outlook_access_token');
+    if (outlookToken) {
+      sessionStorage.setItem('outlookAccessToken', outlookToken);
       // Clean up the URL
       params.delete('outlook_access_token');
       const newUrl = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, '');
@@ -100,7 +103,35 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
         fetchAndDisplayOutlookEvents(false); // Don't show alerts for auto-fetch
       }, 1000); // Small delay to ensure token is stored
     }
-  }, []);
+
+    // Handle Google Calendar OAuth callback
+    const googleCalendarToken = params.get('google_calendar_token');
+    const googleCalendarSuccess = params.get('success');
+    if (googleCalendarToken && googleCalendarSuccess === 'google_calendar_connected') {
+      sessionStorage.setItem('googleCalendarToken', googleCalendarToken);
+      // Clean up the URL
+      params.delete('google_calendar_token');
+      params.delete('success');
+      const newUrl = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, '');
+      window.history.replaceState({}, '', newUrl);
+      
+      
+      // Refresh Google events
+      setTimeout(() => {
+        refreshGoogleEvents();
+      }, 1000);
+    }
+
+    // Handle OAuth errors
+    const error = params.get('error');
+    if (error) {
+      alert(`OAuth Error: ${error}`);
+      // Clean up the URL
+      params.delete('error');
+      const newUrl = `${window.location.pathname}?${params.toString()}`.replace(/\?$/, '');
+      window.history.replaceState({}, '', newUrl);
+    }
+  }, [refreshGoogleEvents]);
 
   const loadOutlookStatus = async () => {
     try {
@@ -195,19 +226,19 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
   const handleConnectGoogle = async () => {
     setIsConnectingGoogle(true);
     try {
-      // Get Google OAuth URL from API
-      const response = await fetch('/api/calendar/google/auth-url');
+      // Get Google Calendar OAuth URL from API
+      const response = await fetch('/api/calendar/google-calendar/auth-url');
       const result = await response.json();
       
       if (result.success && result.data?.authUrl) {
         setGoogleAuthUrl(result.data.authUrl);
-        // In a real app, you'd redirect to this URL or open it in a popup
+        // Open Google OAuth in new window
         window.open(result.data.authUrl, '_blank');
       } else {
-        throw new Error('Failed to get Google auth URL');
+        throw new Error('Failed to get Google Calendar auth URL');
       }
     } catch (error) {
-      console.error('Failed to generate Google auth URL:', error);
+      console.error('Failed to generate Google Calendar auth URL:', error);
     } finally {
       setIsConnectingGoogle(false);
     }
@@ -277,9 +308,72 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
       source: 'google-calendar'
     };
 
-    const createdEvent = await createEvent(newEvent);
-    if (createdEvent) {
-      console.log('Event created:', createdEvent);
+    // Check if Google Calendar is connected
+    const googleCalendarToken = sessionStorage.getItem('googleCalendarToken');
+    
+    if (googleCalendarToken) {
+      // Create event in Google Calendar
+      try {
+        const response = await fetch('/api/calendar/google-calendar/create_event', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            access_token: googleCalendarToken,
+            event: newEvent
+          })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          console.log('Event created in Google Calendar:', result.data);
+          // Refresh Google Calendar events to show the new event
+          await fetchAndDisplayGoogleEvents(false);
+        } else {
+          console.error('Failed to create event in Google Calendar:', result.error);
+          // Fallback to local database
+          const createdEvent = await createEvent(newEvent);
+          if (createdEvent) {
+            console.log('Event created in local database:', createdEvent);
+          }
+        }
+      } catch (error) {
+        console.error('Error creating event in Google Calendar:', error);
+        // Fallback to local database
+        const createdEvent = await createEvent(newEvent);
+        if (createdEvent) {
+          console.log('Event created in local database:', createdEvent);
+        }
+      }
+    } else {
+      // No Google Calendar connection, create in local database
+      const createdEvent = await createEvent(newEvent);
+      if (createdEvent) {
+        console.log('Event created in local database:', createdEvent);
+      }
+    }
+  };
+
+  // Function to fetch Google Calendar events using the new route
+  const fetchGoogleCalendarEvents = async () => {
+    const accessToken = sessionStorage.getItem('googleCalendarToken');
+    if (!accessToken) {
+      console.log('No Google Calendar access token found');
+      return [];
+    }
+
+    try {
+      const response = await fetch(`/api/calendar/google-calendar/events?access_token=${accessToken}`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        return result.data.events || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Failed to fetch Google Calendar events:', error);
+      return [];
     }
   };
 
@@ -476,6 +570,39 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
     }
   };
 
+  const fetchAndDisplayGoogleEvents = async (showAlert = true) => {
+    try {
+      const accessToken = sessionStorage.getItem('googleCalendarToken');
+      if (!accessToken) {
+        if (showAlert) {
+          alert('No Google Calendar access token found. Please connect to Google Calendar first.');
+        }
+        return;
+      }
+
+      const response = await fetch(`/api/calendar/google-calendar/get_events?access_token=${accessToken}`);
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to fetch Google Calendar events');
+      }
+
+      const events = result.data.events || [];
+      
+     
+      
+      console.log('Google Calendar events:', events);
+      
+      // Store Google Calendar events in state
+      setGoogleCalendarEvents(events);
+    } catch (error) {
+      console.error('Failed to fetch Google Calendar events:', error);
+      if (showAlert) {
+        alert(`Failed to fetch Google Calendar events: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -514,8 +641,8 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
               <div>
                 <h4 className="font-medium">Google Calendar</h4>
                 <p className="text-sm text-gray-600">
-                  {googleEvents.length > 0 
-                    ? `Connected (${googleEvents.length} events)` 
+                  {sessionStorage.getItem('googleCalendarToken')
+                    ? `Connected (${googleCalendarEvents.length} events)` 
                     : 'Not connected'
                   }
                 </p>
@@ -654,11 +781,11 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
             <CardTitle>Recent Events</CardTitle>
           </CardHeader>
           <CardContent>
-            {events.length === 0 && outlookEvents.length === 0 ? (
+            {events.length === 0 && outlookEvents.length === 0 && googleCalendarEvents.length === 0 ? (
               <p className="text-gray-500 text-center py-4">No events found</p>
             ) : (
               <div className="space-y-3">
-                {[...events, ...outlookEvents].slice(0, 5).map((event) => (
+                {[...events, ...outlookEvents, ...googleCalendarEvents].slice(0, 5).map((event) => (
                   <div
                     key={event.id}
                     className="flex items-center justify-between p-3 border rounded-lg"
@@ -702,6 +829,9 @@ export function CalendarIntegration(props: CalendarIntegrationProps) {
             </Button>
             <Button onClick={() => fetchAndDisplayOutlookEvents(true)} variant="outline" size="sm">
               Fetch Outlook Events (Client)
+            </Button>
+            <Button onClick={() => fetchAndDisplayGoogleEvents(true)} variant="outline" size="sm">
+              Fetch Google Calendar Events
             </Button>
           </CardContent>
         </Card>
